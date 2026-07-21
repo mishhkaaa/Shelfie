@@ -1,39 +1,24 @@
-.claude/
-
-# Editor settings
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS files
-.DS_Store
-Thumbs.db
-Desktop.ini
-
-# Logs and diagnostics
+# Logs
+logs
 *.log
-*.out
-*.err
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Environment files
-.env
-.env.*
-!.env.example
+node_modules
+dist
+dist-ssr
+*.local
 
-# Common build and cache outputs
-dist/
-build/
-out/
-coverage/
-tmp/
-temp/
-node_modules/
-.cache/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Keep documentation tracked
-!docs/
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

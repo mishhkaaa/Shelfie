@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-myntra-brand: #ff3f6c;
+  --color-myntra-hover: #e0325d;
+  --color-myntra-dark: #282c3f;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f9fafb;
+}

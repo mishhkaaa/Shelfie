@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Shelfie",
+  "version": "0.1.0",
+  "description": "Version-controlled shopping profiles for Myntra.",
+  "permissions": ["storage", "sidePanel", "tabs"],
+  "host_permissions": ["https://www.myntra.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.myntra.com/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "action": {
+    "default_title": "Open Shelfie"
+  }
+}
