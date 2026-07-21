@@ -1,0 +1,66 @@
+import { useShelfieStore } from "../store/useShelfieStore";
+import { buildUrlFromConstraints } from "../adapter/urlSchema";
+import type { ProfileVersion } from "../api/types";
+
+export function ProfileList() {
+  const profiles = useShelfieStore((state) => state.profiles);
+  const activePersona = useShelfieStore((state) => state.activePersona);
+  const activateProfile = useShelfieStore((state) => state.activateProfile);
+  const deleteProfile = useShelfieStore((state) => state.deleteProfile);
+
+  // Filter profiles by the currently selected persona
+  const personaProfiles = profiles.filter(p => p.personaId === activePersona || !p.personaId);
+
+  const handleActivate = (p: ProfileVersion) => {
+    activateProfile(p);
+    const url = buildUrlFromConstraints(p.constraints);
+    
+    // Tell the active Myntra tab to navigate
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tabId = tabs[0]?.id;
+      if (tabId) {
+        chrome.tabs.sendMessage(tabId, { type: "NAVIGATE_TO", url }, () => {
+          if (chrome.runtime.lastError) {
+            // If content script isn't loaded (e.g. they didn't refresh), fallback to hard navigation
+            console.log("Content script missing, doing hard navigation...");
+            chrome.tabs.update(tabId, { url });
+          }
+        });
+      }
+    });
+  };
+
+  return (
+    <div className="mb-4">
+      <h2 className="text-sm font-bold text-gray-800 mb-2">Saved Profiles</h2>
+      {personaProfiles.length === 0 ? (
+        <p className="text-xs text-gray-500 italic">No profiles saved for this persona yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {personaProfiles.map(p => (
+            <div 
+              key={p.id}
+              className="group flex justify-between items-center bg-white border border-gray-200 p-3 rounded cursor-pointer hover:border-myntra-brand transition shadow-sm"
+              onClick={() => handleActivate(p)}
+            >
+              <span className="text-sm font-semibold text-gray-700">{p.name}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400">v{p.version}</span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation(); // prevent clicking the card
+                    deleteProfile(p.id);
+                  }}
+                  className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                  title="Delete Profile"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
