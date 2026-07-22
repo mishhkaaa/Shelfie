@@ -13,9 +13,16 @@ export default function App() {
   const setActivePersona = useShelfieStore((state) => state.setActivePersona);
   const addPersona = useShelfieStore((state) => state.addPersona);
   const loadLiveConstraints = useShelfieStore((state) => state.loadLiveConstraints);
+  const initialize = useShelfieStore((state) => state.initialize);
 
   const [isAddingPersona, setIsAddingPersona] = useState(false);
   const [newPersonaName, setNewPersonaName] = useState("");
+
+  // Real hydration from the backend (personas + profiles) on every panel
+  // open — there is no local seed data or persisted mock state anymore.
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
 
   useEffect(() => {
     const handleUrl = (url: string) => {

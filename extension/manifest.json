@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Version-controlled shopping profiles for Myntra.",
   "permissions": ["storage", "sidePanel", "tabs"],
-  "host_permissions": ["https://www.myntra.com/*"],
+  "host_permissions": ["https://www.myntra.com/*", "http://localhost:8000/*"],
   "background": {
     "service_worker": "background.js"
   },

@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: shelfie-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shelfie
+      POSTGRES_PASSWORD: shelfie
+      POSTGRES_DB: shelfie
+    ports:
+      # Host 5433 -> container 5432. A native Postgres service on this machine
+      # already owns host port 5432, so 5433 avoids silently colliding with it.
+      - "5433:5432"
+    volumes:
+      - shelfie_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shelfie -d shelfie"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  shelfie_pgdata:

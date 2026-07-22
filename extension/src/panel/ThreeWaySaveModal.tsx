@@ -9,6 +9,7 @@ export function ThreeWaySaveModal() {
   const saveProfile = useShelfieStore((state) => state.saveProfile);
 
   const [newName, setNewName] = useState("");
+  const [versionLabel, setVersionLabel] = useState("");
 
   if (!driftResult) return null;
 
@@ -37,22 +38,31 @@ export function ThreeWaySaveModal() {
 
         {/* Three Choices */}
         <div className="p-4 space-y-3">
-          
+
+          {/* Optional label, used by either "Create New Version" or "Update Current" below */}
+          <input
+            type="text"
+            placeholder="Label this version (optional), e.g. Added occasion filter"
+            value={versionLabel}
+            onChange={(e) => setVersionLabel(e.target.value)}
+            className="w-full text-xs border rounded px-2 py-1.5 outline-none focus:border-myntra-brand"
+          />
+
           {/* Choice 1: New Version */}
-          <button 
-            onClick={() => confirmSave("new_version")}
+          <button
+            onClick={() => confirmSave("new_version", versionLabel || undefined)}
             className="w-full text-left p-3 border rounded hover:border-myntra-brand hover:bg-pink-50 transition"
           >
             <div className="font-bold text-sm text-gray-800">Create New Version</div>
-            <div className="text-xs text-gray-500">Keep history. (v{activeProfile!.version} → v{activeProfile!.version + 1})</div>
+            <div className="text-xs text-gray-500">Keep history. (currently v{activeProfile!.version})</div>
             {driftResult.decision === "new_version" && (
               <span className="inline-block mt-1 bg-myntra-brand text-white text-[10px] px-1.5 py-0.5 rounded">Recommended</span>
             )}
           </button>
 
           {/* Choice 2: Overwrite */}
-          <button 
-            onClick={() => confirmSave("update")}
+          <button
+            onClick={() => confirmSave("update", versionLabel || undefined)}
             className="w-full text-left p-3 border rounded hover:border-myntra-brand hover:bg-pink-50 transition"
           >
             <div className="font-bold text-sm text-gray-800">Update Current</div>

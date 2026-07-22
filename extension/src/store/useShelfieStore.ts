@@ -1,179 +1,176 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import type { Constraints, ProfileVersion } from "../api/types";
+import type { Constraints, DriftResponse, ProfileVersion } from "../api/types";
+import { api } from "../api/client";
 import { constraintsEqual } from "../adapter/urlSchema";
 
+interface Persona {
+  id: string;
+  label: string;
+  emoji: string;
+}
+
 interface ShelfieState {
-  currentUser: string;
   activePersona: string;
-  personas: { id: string; label: string; emoji: string }[];
-  
+  personas: Persona[];
+
   activeProfile: ProfileVersion | null;
   liveConstraints: Constraints | null;
   isDirty: boolean;
-  driftResult: any | null; // using any for MVP simplicity until we pull the exact type
+  driftResult: DriftResponse | null;
 
   profiles: ProfileVersion[];
 
+  initialize: () => Promise<void>;
   setActivePersona: (id: string) => void;
   loadLiveConstraints: (c: Constraints) => void;
   activateProfile: (profile: ProfileVersion) => void;
-  saveProfile: (name: string) => void;
-  
+  saveProfile: (name: string) => Promise<void>;
+
   // Day 2 Actions
-  requestSave: () => void;
-  confirmSave: (mode: "new_version" | "update" | "new_profile", name?: string) => void;
-  rollback: (profileId: string, toVersion: number) => void;
+  requestSave: () => Promise<void>;
+  confirmSave: (mode: "new_version" | "update" | "new_profile", name?: string) => Promise<void>;
+  rollback: (profileId: string, toVersion: number) => Promise<void>;
   clearDrift: () => void;
-  addPersona: (label: string, emoji: string) => void;
-  deleteProfile: (id: string) => void;
+  addPersona: (label: string, emoji: string) => Promise<void>;
+  deleteProfile: (id: string) => Promise<void>;
 }
 
-export const useShelfieStore = create<ShelfieState>()(
-  persist(
-    (set) => ({
-      currentUser: "david",
-      activePersona: "amma",
-      personas: [
-        { id: "amma", label: "Amma", emoji: "👩‍🦳" },
-        { id: "david", label: "David", emoji: "👦" },
-      ],
-      
+async function fetchProfilesFor(personaId: string): Promise<ProfileVersion[]> {
+  if (!personaId) return [];
+  const { profiles } = await api.listProfiles(personaId);
+  return profiles;
+}
+
+export const useShelfieStore = create<ShelfieState>()((set, get) => ({
+  activePersona: "",
+  personas: [],
+
+  activeProfile: null,
+  liveConstraints: null,
+  isDirty: false,
+  driftResult: null,
+
+  profiles: [],
+
+  // Real hydration from the backend — no seed data. Called once on app mount.
+  initialize: async () => {
+    const { personas } = await api.listPersonas();
+    const mapped: Persona[] = personas.map((p) => ({ id: p.id, label: p.name, emoji: "👤" }));
+    const activePersona = mapped[0]?.id ?? "";
+    const profiles = await fetchProfilesFor(activePersona);
+    set({ personas: mapped, activePersona, profiles, activeProfile: null, isDirty: false });
+  },
+
+  setActivePersona: (id) => {
+    set({ activePersona: id, activeProfile: null, isDirty: false, profiles: [] });
+    fetchProfilesFor(id).then((profiles) => set({ profiles }));
+  },
+
+  addPersona: async (label) => {
+    const created = await api.createPersona(label);
+    set((state) => ({
+      personas: [...state.personas, { id: created.id, label: created.name, emoji: "👤" }],
+      activePersona: created.id,
       activeProfile: null,
-      liveConstraints: null,
       isDirty: false,
-      driftResult: null,
-      
-      // Pre-load some dummy data so it feels alive immediately!
-      profiles: [
-        {
-          id: "prof_1",
-          name: "Bikini Tops",
-          version: 1,
-          personaId: "amma",
-          constraints: {
-            category: { articleType: "swimwear" },
-            price: { min: 0, max: 0 },
-            brand: { include: [], exclude: [] },
-            fabric: { include: [] },
-            sleeve: { include: [] },
-            size: { include: [] },
-            color: { include: [], exclude: [] }
-          }
-        },
-        {
-          id: "prof_2",
-          name: "Hot Wheels Cars",
-          version: 1,
-          personaId: "david",
-          constraints: {
-            category: { articleType: "toys" },
-            price: { min: 0, max: 0 },
-            brand: { include: ["Hot Wheels"], exclude: [] },
-            fabric: { include: [] },
-            sleeve: { include: [] },
-            size: { include: [] },
-            color: { include: [], exclude: [] }
-          }
-        }
-      ],
+      profiles: [],
+    }));
+  },
 
-      setActivePersona: (id) => set({ activePersona: id, activeProfile: null, isDirty: false }),
+  loadLiveConstraints: (c) =>
+    set((state) => {
+      const dirty = state.activeProfile != null && !constraintsEqual(c, state.activeProfile.constraints);
+      return { liveConstraints: c, isDirty: dirty };
+    }),
 
-      addPersona: (label, emoji) => set((state) => {
-        const newId = "persona_" + Date.now();
-        return {
-          personas: [...state.personas, { id: newId, label, emoji }],
-          activePersona: newId,
-          activeProfile: null,
-          isDirty: false
-        };
-      }),
-  
-  loadLiveConstraints: (c) => set((state) => {
-    const dirty = state.activeProfile != null && !constraintsEqual(c, state.activeProfile.constraints);
-    return { liveConstraints: c, isDirty: dirty };
-  }),
+  activateProfile: (profile) =>
+    set({
+      activeProfile: profile,
+      isDirty: false,
+    }),
 
-  activateProfile: (profile) => set({
-    activeProfile: profile,
-    isDirty: false
-  }),
+  saveProfile: async (name) => {
+    const state = get();
+    if (!state.liveConstraints || !state.activePersona) {
+      console.error("Shelfie: saveProfile no-op — missing liveConstraints or activePersona", {
+        hasLiveConstraints: !!state.liveConstraints,
+        activePersona: state.activePersona,
+      });
+      return;
+    }
+    const created = await api.createProfile(name, state.activePersona, state.liveConstraints);
+    set((s) => ({
+      profiles: [...s.profiles, created],
+      activeProfile: created,
+      isDirty: false,
+    }));
+  },
 
-  saveProfile: (name) => set((state) => {
-    if (!state.liveConstraints) return state;
-    const newProfile: ProfileVersion = {
-      id: "prof_" + Date.now(),
-      name,
-      version: 1,
-      personaId: state.activePersona,
-      constraints: state.liveConstraints
-    };
-    return {
-      profiles: [...state.profiles, newProfile],
-      activeProfile: newProfile,
-      isDirty: false
-    };
-  }),
-
-  deleteProfile: (id) => set((state) => {
-    return {
-      profiles: state.profiles.filter(p => p.id !== id),
-      activeProfile: state.activeProfile?.id === id ? null : state.activeProfile
-    };
-  }),
+  deleteProfile: async (id) => {
+    await api.deleteProfile(id);
+    set((state) => ({
+      profiles: state.profiles.filter((p) => p.id !== id),
+      activeProfile: state.activeProfile?.id === id ? null : state.activeProfile,
+    }));
+  },
 
   // --- DAY 2 ACTIONS ---
-  requestSave: () => set(() => {
-    // Mocking the AI /drift endpoint
-    return {
-      driftResult: {
-        decision: "new_version",
-        reason: "You added a brand filter, narrowing down the results. This feels like a refinement of the original search.",
-        fieldContributions: { brand: 1 }
-      }
-    };
-  }),
+  requestSave: async () => {
+    const state = get();
+    if (!state.activeProfile || !state.liveConstraints) {
+      console.error("Shelfie: requestSave no-op — missing activeProfile or liveConstraints", {
+        hasActiveProfile: !!state.activeProfile,
+        hasLiveConstraints: !!state.liveConstraints,
+      });
+      return;
+    }
+    const result = await api.drift(state.activeProfile.id, state.liveConstraints);
+    set({ driftResult: result });
+  },
 
   clearDrift: () => set({ driftResult: null }),
 
-  confirmSave: (mode, name) => set((state) => {
-    if (!state.activeProfile || !state.liveConstraints) return state;
-    
-    if (mode === "new_profile" && name) {
-      // Handled just like saveProfile
-      return state; // we'll just let the UI call saveProfile directly for this case to save time
+  confirmSave: async (mode, name) => {
+    const state = get();
+    if (!state.activeProfile || !state.liveConstraints) {
+      console.error("Shelfie: confirmSave no-op — missing activeProfile or liveConstraints", {
+        hasActiveProfile: !!state.activeProfile,
+        hasLiveConstraints: !!state.liveConstraints,
+      });
+      return;
     }
-    
-    // For new_version or update, we bump the version number
-    const updatedProfile = {
-      ...state.activeProfile,
-      version: state.activeProfile.version + 1,
-      constraints: state.liveConstraints
-    };
 
-    return {
-      profiles: state.profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p),
+    const result = await api.commit(state.activeProfile.id, mode, state.liveConstraints, name);
+
+    if (result.isNewProfile) {
+      const newProfile = await api.getProfile(result.profileId);
+      set((s) => ({
+        profiles: [...s.profiles, newProfile],
+        activeProfile: newProfile,
+        isDirty: false,
+        driftResult: null,
+      }));
+      return;
+    }
+
+    // Re-fetch rather than hand-constructing the updated profile locally —
+    // the backend response also carries versionLabel/history now, which we
+    // don't have enough information to reconstruct client-side.
+    const updatedProfile = await api.getProfile(result.profileId);
+    set((s) => ({
+      profiles: s.profiles.map((p) => (p.id === updatedProfile.id ? updatedProfile : p)),
       activeProfile: updatedProfile,
       isDirty: false,
-      driftResult: null
-    };
-  }),
+      driftResult: null,
+    }));
+  },
 
-  rollback: (profileId, toVersion) => set((state) => {
-    // In a real app, this hits GET /profiles/:id?version=X
-    // For MVP, we just decrement the version number and keep the constraints the same for visual effect
-    const p = state.profiles.find(x => x.id === profileId);
-    if (!p) return state;
-    const rolledBack = { ...p, version: toVersion };
-    return {
-      profiles: state.profiles.map(x => x.id === profileId ? rolledBack : x),
-      activeProfile: rolledBack,
-      isDirty: false
-    };
-  })
-}),
-{
-  name: "shelfie-storage-v2", // name of the item in localStorage
-}
-));
+  rollback: async (profileId, toVersion) => {
+    const updated = await api.rollback(profileId, toVersion);
+    set((state) => ({
+      profiles: state.profiles.map((p) => (p.id === profileId ? updated : p)),
+      activeProfile: state.activeProfile?.id === profileId ? updated : state.activeProfile,
+      isDirty: false,
+    }));
+  },
+}));
