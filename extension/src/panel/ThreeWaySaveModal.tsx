@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useShelfieStore } from "../store/useShelfieStore";
+import { api } from "../api/client";
+import type { DiffResult } from "../api/types";
 
 export function ThreeWaySaveModal() {
   const driftResult = useShelfieStore((state) => state.driftResult);
@@ -7,11 +9,25 @@ export function ThreeWaySaveModal() {
   const clearDrift = useShelfieStore((state) => state.clearDrift);
   const activeProfile = useShelfieStore((state) => state.activeProfile);
   const saveProfile = useShelfieStore((state) => state.saveProfile);
+  const liveConstraints = useShelfieStore((state) => state.liveConstraints);
+  const activePersona = useShelfieStore((state) => state.activePersona);
 
   const [newName, setNewName] = useState("");
   const [versionLabel, setVersionLabel] = useState("");
+  const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
 
   if (!driftResult) return null;
+
+  const handlePreviewDiff = () => {
+    if (!activeProfile || !liveConstraints) return;
+    setDiffLoading(true);
+    api
+      .previewDiff(activeProfile.constraints, liveConstraints, activePersona || undefined)
+      .then(setDiffResult)
+      .catch(() => setDiffResult(null))
+      .finally(() => setDiffLoading(false));
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -34,6 +50,24 @@ export function ThreeWaySaveModal() {
           <p className="text-xs text-gray-500 mt-2">
             Recommendation: <strong className="uppercase">{driftResult.decision.replace("_", " ")}</strong>
           </p>
+
+          {/* Dry-run diff preview (master prompt Part 2, Section 4.4) */}
+          {!diffResult ? (
+            <button
+              onClick={handlePreviewDiff}
+              disabled={diffLoading}
+              className="mt-2 text-[11px] text-gray-500 hover:text-gray-800 underline disabled:opacity-50"
+            >
+              {diffLoading ? "Checking catalog…" : "Preview changes in the catalog"}
+            </button>
+          ) : (
+            <p className="text-[11px] text-gray-600 mt-2 bg-gray-50 rounded p-2">
+              +{diffResult.added} added
+              {diffResult.addedSampleBrand ? ` (mostly ${diffResult.addedSampleBrand})` : ""}, −{diffResult.removed}{" "}
+              removed
+              <span className="text-gray-400"> (synthetic catalog, for demo purposes)</span>
+            </p>
+          )}
         </div>
 
         {/* Three Choices */}

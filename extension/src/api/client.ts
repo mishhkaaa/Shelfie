@@ -1,9 +1,13 @@
 import type {
   AccountSettings,
   CommitResponse,
+  CompileIntentResponse,
   Constraints,
+  CoverageResponse,
+  DiffResult,
   DiscoverItem,
   DriftResponse,
+  GlobalExclusions,
   ObserveResponse,
   ProfileVersion,
 } from "./types";
@@ -144,5 +148,35 @@ export const api = {
     request<ObserveResponse>("/behaviour/observe", {
       method: "POST",
       body: JSON.stringify({ personaId, constraints }),
+    }),
+
+  // --- Coverage advisor + dry-run diff (master prompt Part 2, Section 4) ---
+  checkCoverage: (constraints: Constraints, personaId?: string) =>
+    request<CoverageResponse>(
+      `/coverage${personaId ? `?personaId=${encodeURIComponent(personaId)}` : ""}`,
+      { method: "POST", body: JSON.stringify(constraints) }
+    ),
+
+  previewDiff: (oldConstraints: Constraints, newConstraints: Constraints, personaId?: string) =>
+    request<DiffResult>(`/diff${personaId ? `?personaId=${encodeURIComponent(personaId)}` : ""}`, {
+      method: "POST",
+      body: JSON.stringify({ oldConstraints, newConstraints }),
+    }),
+
+  // --- Tier 3: global negative rules ---
+  getExclusions: (personaId: string) =>
+    request<{ globalExclusions: GlobalExclusions }>(`/personas/${encodeURIComponent(personaId)}/exclusions`),
+
+  setExclusions: (personaId: string, exclusions: GlobalExclusions) =>
+    request<{ globalExclusions: GlobalExclusions }>(`/personas/${encodeURIComponent(personaId)}/exclusions`, {
+      method: "PATCH",
+      body: JSON.stringify(exclusions),
+    }),
+
+  // --- Tier 3: fuzzy NL -> filters compiler ---
+  compileIntent: (sentence: string) =>
+    request<CompileIntentResponse>("/ai/compile-intent", {
+      method: "POST",
+      body: JSON.stringify({ sentence }),
     }),
 };

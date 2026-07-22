@@ -105,3 +105,21 @@ Format per entry:
 **What changed:** Checked first whether a Discover/Behaviour placeholder already existed anywhere (per Section 2.3's instruction) — it didn't, so built both as new components styled consistently with the existing card/panel look, not a new visual pattern. `Discover.tsx` is a collapsible section (closed by default, fetches the feed on open) listing public profiles with star/fork controls; forking prompts for which persona to fork into only when the account has more than one. `ProfileList.tsx` gained a small Public/Private pill per profile (click to toggle via `toggleVisibility`) and a "Forked from {owner}" note when applicable; `Timeline.tsx` shows the same note plus the source version. `BehaviourPanel.tsx` is the opt-in toggle (off by default) plus the debounced (2s, deliberately longer than the 600ms name-suggestion debounce) observe call and the dismissible "you've searched this a few times" nudge — clicking its Save button scrolls to and highlights the existing `SaveSheet` (given an `id="shelfie-save-sheet"` for this) rather than duplicating the save form. `App.tsx` mounts both new panels and a global dismissible red banner for `actionError`.
 **Why:** Part 2, Sections 2.3 and 3.3.
 **Action needed from teammate:** none.
+
+## 2026-07-23 01:10 — Coverage warning in SaveSheet + dry-run diff preview in ThreeWaySaveModal
+**File(s):** extension/src/panel/SaveSheet.tsx, extension/src/panel/ThreeWaySaveModal.tsx, extension/src/api/client.ts, extension/src/api/types.ts
+**What changed:** Added `checkCoverage`/`previewDiff` client functions and `CoverageResponse`/`DiffResult` types. `SaveSheet` now debounces live-constraint changes (600ms, same pattern as the name suggestion) and shows a non-blocking amber note — "Only N products match — try relaxing X (+M items)" — when the synthetic catalog returns relaxation suggestions; it's explicitly labeled "(synthetic catalog, for demo purposes)" so it's never mistaken for real Myntra inventory counts. `ThreeWaySaveModal` gained a "Preview changes in the catalog" button that calls `/diff` on demand (not auto-fired, since it's a heavier query) and shows "+N added (mostly {brand}), −M removed" once clicked.
+**Why:** Part 2, Section 4.4.
+**Action needed from teammate:** none.
+
+## 2026-07-23 01:15 — NL→filters compiler and global exclusions panels (Tier 3)
+**File(s):** extension/src/panel/IntentCompiler.tsx (new), extension/src/panel/GlobalExclusionsPanel.tsx (new), extension/src/api/client.ts, extension/src/api/types.ts, extension/src/App.tsx
+**What changed:** `IntentCompiler` is a small "✨ Describe what you want" input — typing a sentence and hitting Compile calls the new `/ai/compile-intent` endpoint and shows exactly which fields were recognized (with the original phrase that triggered each one) before anything is applied; clicking "Apply to search" merges the validated patch onto the current live constraints via the existing `loadLiveConstraints` action (no new store action needed — this is exactly what that action already does, just with a merged value instead of a URL-parsed one). Nothing is ever silently applied — the propose-then-validate discipline is visible in the UI, not just the backend. `GlobalExclusionsPanel` is a collapsible per-persona "never show me" editor (brand/fabric/color, comma-separated) backed by the new `GET`/`PATCH /personas/{id}/exclusions` endpoints.
+**Why:** Part 2, Section 5 (explicitly the lowest-priority tier in the prompt, built last).
+**Action needed from teammate:** none.
+
+## 2026-07-23 01:20 — Final cross-tier verification
+**File(s):** none (verification only)
+**What changed:** `tsc -b` and `npm run build` both pass clean with everything from this session (Tier 1A, 1B, 2, and 3) present simultaneously. Backend `/openapi.json` confirms every route from every tier is registered with no path collisions.
+**Why:** Sanity check before calling the full Part 1 + Part 2 build done.
+**Action needed from teammate:** none — ready to load the unpacked `dist/` build and test in Chrome.

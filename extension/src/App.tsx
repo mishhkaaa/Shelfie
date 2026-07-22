@@ -7,6 +7,8 @@ import { Timeline } from "./panel/Timeline";
 import { ThreeWaySaveModal } from "./panel/ThreeWaySaveModal";
 import { Discover } from "./panel/Discover";
 import { BehaviourPanel } from "./panel/BehaviourPanel";
+import { IntentCompiler } from "./panel/IntentCompiler";
+import { GlobalExclusionsPanel } from "./panel/GlobalExclusionsPanel";
 import { parseUrlToConstraints } from "./adapter/urlSchema";
 
 export default function App() {
@@ -120,10 +122,12 @@ export default function App() {
       )}
 
       <StatusBar />
+      <IntentCompiler />
       <ProfileList />
       <SaveSheet />
       <Timeline />
       <BehaviourPanel />
+      <GlobalExclusionsPanel />
       <Discover />
 
       <ThreeWaySaveModal />

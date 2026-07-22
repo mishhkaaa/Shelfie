@@ -67,6 +67,35 @@ export interface ObserveResponse {
   seenCount: number;
 }
 
+export interface CoverageSuggestion {
+  field: string;
+  newCount: number;
+  gain: number;
+}
+
+export interface CoverageResponse {
+  currentCount: number;
+  suggestions: CoverageSuggestion[];
+}
+
+export interface DiffResult {
+  added: number;
+  removed: number;
+  total: number;
+  addedSampleBrand: string | null;
+}
+
+export interface GlobalExclusions {
+  brand: string[];
+  fabric: string[];
+  color: string[];
+}
+
+export interface CompileIntentResponse {
+  constraints: Partial<Constraints>;
+  provenance: Record<string, string>;
+}
+
 export interface DriftResponse {
   decision: "new_version" | "update" | "new_profile";
   reason: string;

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import CORS_ORIGINS
 from .db import Base, engine
 from .migrations import run_migrations
-from .routers import ai, behaviour, discover, personas, profiles
+from .routers import ai, behaviour, catalog, discover, personas, profiles
 
 logging.basicConfig(level=logging.INFO)
 
@@ -44,6 +44,7 @@ app.include_router(profiles.router)
 app.include_router(ai.router)
 app.include_router(discover.router)
 app.include_router(behaviour.router)
+app.include_router(catalog.router)
 
 
 @app.get("/health")

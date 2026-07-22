@@ -16,6 +16,7 @@ _ALTER_STATEMENTS = [
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS forked_from_profile_id TEXT REFERENCES profiles(profile_id)",
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS forked_from_version INT",
     "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS behaviour_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE personas ADD COLUMN IF NOT EXISTS global_exclusions JSON",
 ]
 
 

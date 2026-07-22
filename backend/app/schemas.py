@@ -165,3 +165,45 @@ class ObserveRequest(BaseModel):
 class ObserveResponse(BaseModel):
     suggest: bool
     seenCount: int
+
+
+class CoverageSuggestion(BaseModel):
+    field: str
+    newCount: int
+    gain: int
+
+
+class CoverageResponse(BaseModel):
+    currentCount: int
+    suggestions: list[CoverageSuggestion]
+
+
+class DiffRequest(BaseModel):
+    oldConstraints: Constraints
+    newConstraints: Constraints
+
+
+class DiffResponse(BaseModel):
+    added: int
+    removed: int
+    total: int
+    addedSampleBrand: Optional[str] = None
+
+
+class GlobalExclusions(BaseModel):
+    brand: list[str] = Field(default_factory=list)
+    fabric: list[str] = Field(default_factory=list)
+    color: list[str] = Field(default_factory=list)
+
+
+class GlobalExclusionsResponse(BaseModel):
+    globalExclusions: GlobalExclusions
+
+
+class CompileIntentRequest(BaseModel):
+    sentence: str
+
+
+class CompileIntentResponse(BaseModel):
+    constraints: dict
+    provenance: dict[str, str]
