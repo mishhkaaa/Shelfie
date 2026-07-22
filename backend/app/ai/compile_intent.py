@@ -23,7 +23,11 @@ LEXICON: dict[str, dict[str, str]] = {
         "kurtas": "kurtas",
         "dress": "dresses-for-birthday-women",
         "dresses": "dresses-for-birthday-women",
+        "dresses for women": "dresses-for-birthday-women",
+        "women's dresses": "dresses-for-birthday-women",
         "birthday dress": "birthday-dresses-for-women",
+        "birthday dresses": "birthday-dresses-for-women",
+        "birthday dresses for women": "birthday-dresses-for-women",
         "shoes": "nike-shoes",
         "nike shoes": "nike-shoes",
         "sneakers": "sneakers",
@@ -86,12 +90,23 @@ LEXICON: dict[str, dict[str, str]] = {
         "mandarin collar": "Mandarin Collar",
     },
     "size": {
+        # Both spoken-word and the abbreviation itself are accepted — the
+        # LLM sometimes proposes the value already abbreviated (e.g. "XS")
+        # rather than spelling it out, and exact-match-only against just the
+        # word form was silently dropping those (found via real testing:
+        # "birthday dresses for women black XS" wasn't extracting size).
         "extra small": "XS",
+        "xs": "XS",
         "small": "S",
+        "s": "S",
         "medium": "M",
+        "m": "M",
         "large": "L",
+        "l": "L",
         "extra large": "XL",
+        "xl": "XL",
         "xxl": "XXL",
+        "extra extra large": "XXL",
     },
 }
 
@@ -122,7 +137,11 @@ SYSTEM_PROMPT = (
     "mentioned or clearly implied. Valid attributes: articleType, brand, "
     "fabric, color, occasion, sleeve, neck, size, price_min, price_max. "
     "For price, only propose price_min/price_max if a number or range is "
-    "actually mentioned (e.g. 'under 1500' -> price_max: 1500)."
+    "actually mentioned (e.g. 'under 1500' -> price_max: 1500). "
+    "Propose EVERY distinct attribute mentioned as its own separate item in "
+    "the list — a sentence naming a category, a color, and a size should "
+    "produce three separate proposals, not just the first one you notice. "
+    "For size, propose it exactly as written (e.g. 'XS', 'M', 'large')."
 )
 
 

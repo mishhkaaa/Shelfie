@@ -1,5 +1,6 @@
 import { useShelfieStore } from "../store/useShelfieStore";
 import { buildUrlFromConstraints } from "../adapter/urlSchema";
+import { navigateActiveTabTo } from "../adapter/navigate";
 import type { ProfileVersion } from "../api/types";
 
 export function ProfileList() {
@@ -14,21 +15,7 @@ export function ProfileList() {
 
   const handleActivate = (p: ProfileVersion) => {
     activateProfile(p);
-    const url = buildUrlFromConstraints(p.constraints);
-    
-    // Tell the active Myntra tab to navigate
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tabId = tabs[0]?.id;
-      if (tabId) {
-        chrome.tabs.sendMessage(tabId, { type: "NAVIGATE_TO", url }, () => {
-          if (chrome.runtime.lastError) {
-            // If content script isn't loaded (e.g. they didn't refresh), fallback to hard navigation
-            console.log("Content script missing, doing hard navigation...");
-            chrome.tabs.update(tabId, { url });
-          }
-        });
-      }
-    });
+    navigateActiveTabTo(buildUrlFromConstraints(p.constraints));
   };
 
   return (

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useShelfieStore } from "../store/useShelfieStore";
 import { api } from "../api/client";
+import { buildUrlFromConstraints } from "../adapter/urlSchema";
+import { navigateActiveTabTo } from "../adapter/navigate";
 import type { Constraints } from "../api/types";
 
 const EMPTY_CONSTRAINTS: Constraints = {
@@ -39,12 +41,12 @@ function mergeConstraints(base: Constraints | null, patch: Partial<Constraints>)
 export function IntentCompiler() {
   const [sentence, setSentence] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [pending, setPending] = useState<{ constraints: Partial<Constraints>; provenance: Record<string, string> } | null>(
     null
   );
 
   const liveConstraints = useShelfieStore((state) => state.liveConstraints);
-  const loadLiveConstraints = useShelfieStore((state) => state.loadLiveConstraints);
 
   const handleCompile = () => {
     if (!sentence.trim() || isLoading) return;
@@ -56,9 +58,26 @@ export function IntentCompiler() {
       .finally(() => setIsLoading(false));
   };
 
+  // Apply-to-search must drive the REAL Myntra tab, not just this panel's
+  // internal state — the same navigation mechanism activateProfile already
+  // uses (build the URL, send NAVIGATE_TO, hard-navigate fallback). We
+  // deliberately do NOT call loadLiveConstraints with the merged object
+  // directly: liveConstraints only ever gets updated by re-parsing the real
+  // navigated URL once the content script reports it, exactly like every
+  // other filter change. That also means any field the URL builder can't
+  // serialize (currently: price) simply won't survive into the real
+  // liveConstraints afterward, instead of silently pretending it was applied.
   const handleApply = () => {
     if (!pending) return;
-    loadLiveConstraints(mergeConstraints(liveConstraints, pending.constraints));
+    const merged = mergeConstraints(liveConstraints, pending.constraints);
+    if (!merged.category.articleType) {
+      setApplyError(
+        'Couldn\'t tell which Myntra page to go to — try mentioning a product type (e.g. "kurtas", "dresses").'
+      );
+      return;
+    }
+    navigateActiveTabTo(buildUrlFromConstraints(merged));
+    setApplyError(null);
     setPending(null);
     setSentence("");
   };
@@ -86,6 +105,10 @@ export function IntentCompiler() {
         </button>
       </div>
 
+      {applyError && (
+        <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded p-2 mt-2">{applyError}</p>
+      )}
+
       {pending && (
         <div className="mt-2 bg-gray-50 border rounded p-2">
           {found.length === 0 ? (
@@ -97,6 +120,9 @@ export function IntentCompiler() {
                 {found.map(([field, value]) => (
                   <li key={field}>
                     <span className="font-semibold">{field}</span> ← "{value}"
+                    {field.startsWith("price.") && (
+                      <span className="text-gray-400"> (not yet applied to the live page)</span>
+                    )}
                   </li>
                 ))}
               </ul>
