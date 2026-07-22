@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import (
     JSON,
@@ -24,6 +25,7 @@ class Account(Base):
 
     account_id: Mapped[str] = mapped_column(String, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    behaviour_tracking_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class Persona(Base):
@@ -46,9 +48,38 @@ class Profile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
+    # Collaboration (master prompt Part 2, Section 2.1) — additive columns.
+    visibility: Mapped[str] = mapped_column(String, nullable=False, default="private")
+    forked_from_profile_id: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("profiles.profile_id"), nullable=True
+    )
+    forked_from_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     events: Mapped[list["Event"]] = relationship(
         "Event", back_populates="profile", order_by="Event.seq"
     )
+
+
+class Star(Base):
+    __tablename__ = "stars"
+
+    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.account_id"), primary_key=True)
+    profile_id: Mapped[str] = mapped_column(String, ForeignKey("profiles.profile_id"), primary_key=True)
+    starred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RecentSearch(Base):
+    __tablename__ = "recent_searches"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    persona_id: Mapped[str] = mapped_column(String, ForeignKey("personas.persona_id"), index=True)
+    constraints_hash: Mapped[str] = mapped_column(String, nullable=False)
+    constraints: Mapped[dict] = mapped_column(JSON, nullable=False)
+    seen_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (UniqueConstraint("persona_id", "constraints_hash", name="uq_recent_search"),)
 
 
 class Event(Base):

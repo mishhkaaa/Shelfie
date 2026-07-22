@@ -14,6 +14,12 @@ export function Timeline() {
   return (
     <div className="bg-white p-4 border border-gray-200 rounded shadow-sm mt-4">
       <h2 className="text-sm font-bold text-gray-800 mb-2">Version History (Timeline)</h2>
+      {activeProfile.forkedFromOwnerLabel && (
+        <p className="text-[10px] text-gray-500 mb-2 italic">
+          Forked from {activeProfile.forkedFromOwnerLabel}
+          {activeProfile.forkedFromVersion ? ` (v${activeProfile.forkedFromVersion})` : ""}
+        </p>
+      )}
       <div className="relative border-l-2 border-gray-200 ml-2 space-y-4 py-2">
         {sortedDesc.length === 0 ? (
           <div className="relative pl-4">

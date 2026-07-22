@@ -1,4 +1,12 @@
-import type { CommitResponse, Constraints, DriftResponse, ProfileVersion } from "./types";
+import type {
+  AccountSettings,
+  CommitResponse,
+  Constraints,
+  DiscoverItem,
+  DriftResponse,
+  ObserveResponse,
+  ProfileVersion,
+} from "./types";
 
 // No configurable settings field exists in the extension UI for this (see
 // FRONTEND_CHANGES_LOG.md) — hardcoded default matching the backend's fixed
@@ -100,5 +108,41 @@ export const api = {
     request<{ suggestedName: string | null; suggestedDescription: string | null }>("/ai/suggest-name", {
       method: "POST",
       body: JSON.stringify({ constraints }),
+    }),
+
+  // --- Collaboration (master prompt Part 2, Section 2) ---
+  setVisibility: (profileId: string, visibility: "private" | "public") =>
+    request<ProfileVersion>(`/profiles/${encodeURIComponent(profileId)}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility }),
+    }),
+
+  discover: (limit = 20, offset = 0) =>
+    request<{ profiles: DiscoverItem[] }>(`/discover?limit=${limit}&offset=${offset}`),
+
+  star: (profileId: string) =>
+    request<{ starred: boolean; starsCount: number }>(`/discover/${encodeURIComponent(profileId)}/star`, {
+      method: "POST",
+    }),
+
+  fork: (profileId: string, personaId: string, name: string) =>
+    request<ProfileVersion>(`/discover/${encodeURIComponent(profileId)}/fork`, {
+      method: "POST",
+      body: JSON.stringify({ personaId, name }),
+    }),
+
+  // --- Behavioural suggestions (master prompt Part 2, Section 3) ---
+  getAccountSettings: () => request<AccountSettings>("/accounts/settings"),
+
+  updateAccountSettings: (settings: AccountSettings) =>
+    request<AccountSettings>("/accounts/settings", {
+      method: "PATCH",
+      body: JSON.stringify(settings),
+    }),
+
+  observeBehaviour: (personaId: string, constraints: Constraints) =>
+    request<ObserveResponse>("/behaviour/observe", {
+      method: "POST",
+      body: JSON.stringify({ personaId, constraints }),
     }),
 };

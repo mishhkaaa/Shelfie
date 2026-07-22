@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Constraints, DriftResponse, ProfileVersion } from "../api/types";
+import type { Constraints, DiscoverItem, DriftResponse, ProfileVersion } from "../api/types";
 import { api } from "../api/client";
 import { constraintsEqual } from "../adapter/urlSchema";
 
@@ -20,6 +20,16 @@ interface ShelfieState {
 
   profiles: ProfileVersion[];
 
+  // Collaboration + behavioural-suggestion state (Part 2). Fetched from the
+  // backend on mount/open, same as everything else — no client-side source
+  // of truth (master prompt Part 2, Section 0.3).
+  discoverFeed: DiscoverItem[];
+  behaviourTrackingEnabled: boolean;
+  // Surfaces the reason behind any action below that no-ops for a legitimate
+  // reason (no persona chosen to fork into, a failed request, etc.) — every
+  // guard clause here sets this instead of silently returning, per Section 0.3.
+  actionError: string | null;
+
   initialize: () => Promise<void>;
   setActivePersona: (id: string) => void;
   loadLiveConstraints: (c: Constraints) => void;
@@ -33,6 +43,14 @@ interface ShelfieState {
   clearDrift: () => void;
   addPersona: (label: string, emoji: string) => Promise<void>;
   deleteProfile: (id: string) => Promise<void>;
+
+  // Part 2 actions — new actions, no existing signatures touched.
+  toggleVisibility: (profileId: string, visibility: "private" | "public") => Promise<void>;
+  fetchDiscoverFeed: () => Promise<void>;
+  starProfile: (profileId: string) => Promise<void>;
+  forkProfile: (profileId: string, personaId: string, name: string) => Promise<void>;
+  setBehaviourTracking: (enabled: boolean) => Promise<void>;
+  clearActionError: () => void;
 }
 
 async function fetchProfilesFor(personaId: string): Promise<ProfileVersion[]> {
@@ -52,13 +70,24 @@ export const useShelfieStore = create<ShelfieState>()((set, get) => ({
 
   profiles: [],
 
+  discoverFeed: [],
+  behaviourTrackingEnabled: false,
+  actionError: null,
+
   // Real hydration from the backend — no seed data. Called once on app mount.
   initialize: async () => {
-    const { personas } = await api.listPersonas();
+    const [{ personas }, settings] = await Promise.all([api.listPersonas(), api.getAccountSettings()]);
     const mapped: Persona[] = personas.map((p) => ({ id: p.id, label: p.name, emoji: "👤" }));
     const activePersona = mapped[0]?.id ?? "";
     const profiles = await fetchProfilesFor(activePersona);
-    set({ personas: mapped, activePersona, profiles, activeProfile: null, isDirty: false });
+    set({
+      personas: mapped,
+      activePersona,
+      profiles,
+      activeProfile: null,
+      isDirty: false,
+      behaviourTrackingEnabled: settings.behaviourTrackingEnabled,
+    });
   },
 
   setActivePersona: (id) => {
@@ -173,4 +202,79 @@ export const useShelfieStore = create<ShelfieState>()((set, get) => ({
       isDirty: false,
     }));
   },
+
+  // --- PART 2: COLLABORATION + BEHAVIOUR ---
+  toggleVisibility: async (profileId, visibility) => {
+    try {
+      const updated = await api.setVisibility(profileId, visibility);
+      set((state) => ({
+        profiles: state.profiles.map((p) => (p.id === profileId ? updated : p)),
+        activeProfile: state.activeProfile?.id === profileId ? updated : state.activeProfile,
+        actionError: null,
+      }));
+    } catch (err) {
+      console.error("Shelfie: toggleVisibility failed", err);
+      set({ actionError: "Couldn't update visibility — try again." });
+    }
+  },
+
+  fetchDiscoverFeed: async () => {
+    try {
+      const { profiles } = await api.discover();
+      set({ discoverFeed: profiles, actionError: null });
+    } catch (err) {
+      console.error("Shelfie: fetchDiscoverFeed failed", err);
+      set({ actionError: "Couldn't load Discover feed — try again." });
+    }
+  },
+
+  starProfile: async (profileId) => {
+    try {
+      const result = await api.star(profileId);
+      set((state) => ({
+        discoverFeed: state.discoverFeed.map((item) =>
+          item.profileId === profileId
+            ? { ...item, starredByMe: result.starred, starsCount: result.starsCount }
+            : item
+        ),
+        actionError: null,
+      }));
+    } catch (err) {
+      console.error("Shelfie: starProfile failed", err);
+      set({ actionError: "Couldn't update star — try again." });
+    }
+  },
+
+  forkProfile: async (profileId, personaId, name) => {
+    if (!personaId || !name.trim()) {
+      const message = "Choose a persona and a name to fork into first.";
+      console.error("Shelfie: forkProfile no-op —", message, { profileId, personaId, name });
+      set({ actionError: message });
+      return;
+    }
+    try {
+      const forked = await api.fork(profileId, personaId, name);
+      const { profiles } = await api.discover();
+      set((state) => ({
+        profiles: state.activePersona === personaId ? [...state.profiles, forked] : state.profiles,
+        discoverFeed: profiles,
+        actionError: null,
+      }));
+    } catch (err) {
+      console.error("Shelfie: forkProfile failed", err);
+      set({ actionError: "Couldn't fork this profile — try again." });
+    }
+  },
+
+  setBehaviourTracking: async (enabled) => {
+    try {
+      const settings = await api.updateAccountSettings({ behaviourTrackingEnabled: enabled });
+      set({ behaviourTrackingEnabled: settings.behaviourTrackingEnabled, actionError: null });
+    } catch (err) {
+      console.error("Shelfie: setBehaviourTracking failed", err);
+      set({ actionError: "Couldn't update this setting — try again." });
+    }
+  },
+
+  clearActionError: () => set({ actionError: null }),
 }));

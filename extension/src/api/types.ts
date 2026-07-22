@@ -39,6 +39,32 @@ export interface ProfileVersion {
   archived?: boolean;
   versionLabel?: string;
   history?: ProfileHistoryEntry[];
+  // Collaboration (master prompt Part 2, Section 2) — additive.
+  visibility?: "private" | "public";
+  forkedFromProfileId?: string;
+  forkedFromVersion?: number;
+  forkedFromOwnerLabel?: string;
+}
+
+export interface DiscoverItem {
+  profileId: string;
+  name: string;
+  versionLabel?: string;
+  ownerLabel: string;
+  starsCount: number;
+  forksCount: number;
+  constraints: Constraints;
+  createdAt?: string;
+  starredByMe: boolean;
+}
+
+export interface AccountSettings {
+  behaviourTrackingEnabled: boolean;
+}
+
+export interface ObserveResponse {
+  suggest: boolean;
+  seenCount: number;
 }
 
 export interface DriftResponse {

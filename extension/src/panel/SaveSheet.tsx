@@ -96,7 +96,7 @@ export function SaveSheet() {
   const rows = liveConstraints ? renderConstraintRows(liveConstraints) : [];
 
   return (
-    <div className="bg-white p-4 border border-gray-200 rounded shadow-sm mt-4">
+    <div id="shelfie-save-sheet" className="bg-white p-4 border border-gray-200 rounded shadow-sm mt-4">
       <h2 className="text-sm font-bold text-gray-800 mb-2">Save current search</h2>
 
       <div className="mb-3">

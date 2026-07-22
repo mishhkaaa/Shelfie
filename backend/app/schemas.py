@@ -81,6 +81,11 @@ class ProfileVersionOut(BaseModel):
     archived: Optional[bool] = None
     versionLabel: Optional[str] = None
     history: Optional[list[HistoryEntry]] = None
+    # Collaboration (master prompt Part 2, Section 2) — additive.
+    visibility: Optional[Literal["private", "public"]] = None
+    forkedFromProfileId: Optional[str] = None
+    forkedFromVersion: Optional[int] = None
+    forkedFromOwnerLabel: Optional[str] = None
 
 
 class DriftRequest(BaseModel):
@@ -116,3 +121,47 @@ class SuggestNameRequest(BaseModel):
 class SuggestNameResponse(BaseModel):
     suggestedName: Optional[str] = None
     suggestedDescription: Optional[str] = None
+
+
+class VisibilityRequest(BaseModel):
+    visibility: Literal["private", "public"]
+
+
+class DiscoverItem(BaseModel):
+    profileId: str
+    name: str
+    versionLabel: Optional[str] = None
+    ownerLabel: str
+    starsCount: int
+    forksCount: int
+    constraints: Constraints
+    createdAt: Optional[str] = None
+    starredByMe: bool = False
+
+
+class DiscoverResponse(BaseModel):
+    profiles: list[DiscoverItem]
+
+
+class StarResponse(BaseModel):
+    starred: bool
+    starsCount: int
+
+
+class ForkRequest(BaseModel):
+    personaId: str
+    name: str
+
+
+class AccountSettings(BaseModel):
+    behaviourTrackingEnabled: bool
+
+
+class ObserveRequest(BaseModel):
+    personaId: str
+    constraints: Constraints
+
+
+class ObserveResponse(BaseModel):
+    suggest: bool
+    seenCount: int

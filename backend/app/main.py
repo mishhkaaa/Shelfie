@@ -5,11 +5,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import CORS_ORIGINS
 from .db import Base, engine
-from .routers import ai, personas, profiles
+from .migrations import run_migrations
+from .routers import ai, behaviour, discover, personas, profiles
 
 logging.basicConfig(level=logging.INFO)
 
+# New tables (stars, recent_searches) are created here; new columns on
+# pre-existing tables (profiles.visibility, accounts.behaviour_tracking_enabled,
+# etc.) are added by run_migrations — create_all() never alters existing
+# tables, only creates missing ones.
 Base.metadata.create_all(bind=engine)
+run_migrations(engine)
 
 app = FastAPI(title="Shelfie Backend")
 
@@ -36,6 +42,8 @@ app.add_middleware(
 app.include_router(personas.router)
 app.include_router(profiles.router)
 app.include_router(ai.router)
+app.include_router(discover.router)
+app.include_router(behaviour.router)
 
 
 @app.get("/health")

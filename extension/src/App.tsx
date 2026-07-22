@@ -5,6 +5,8 @@ import { ProfileList } from "./panel/ProfileList";
 import { SaveSheet } from "./panel/SaveSheet";
 import { Timeline } from "./panel/Timeline";
 import { ThreeWaySaveModal } from "./panel/ThreeWaySaveModal";
+import { Discover } from "./panel/Discover";
+import { BehaviourPanel } from "./panel/BehaviourPanel";
 import { parseUrlToConstraints } from "./adapter/urlSchema";
 
 export default function App() {
@@ -14,6 +16,8 @@ export default function App() {
   const addPersona = useShelfieStore((state) => state.addPersona);
   const loadLiveConstraints = useShelfieStore((state) => state.loadLiveConstraints);
   const initialize = useShelfieStore((state) => state.initialize);
+  const actionError = useShelfieStore((state) => state.actionError);
+  const clearActionError = useShelfieStore((state) => state.clearActionError);
 
   const [isAddingPersona, setIsAddingPersona] = useState(false);
   const [newPersonaName, setNewPersonaName] = useState("");
@@ -108,10 +112,19 @@ export default function App() {
         </div>
       </div>
       
+      {actionError && (
+        <div className="mb-4 p-2 text-xs font-semibold text-red-800 bg-red-100 rounded flex justify-between items-center">
+          <span>{actionError}</span>
+          <button onClick={clearActionError} className="text-red-400 hover:text-red-800 ml-2">✕</button>
+        </div>
+      )}
+
       <StatusBar />
       <ProfileList />
       <SaveSheet />
       <Timeline />
+      <BehaviourPanel />
+      <Discover />
 
       <ThreeWaySaveModal />
     </div>
