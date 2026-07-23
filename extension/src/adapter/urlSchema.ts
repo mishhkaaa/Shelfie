@@ -61,6 +61,7 @@ const NAMED_KEYS = new Set([
   "Sleeve",
   "Neck",
   "Size",
+  "size_facet",
   "Color",
   "Occasions",
   "Gender",
@@ -98,7 +99,11 @@ export function parseUrlToConstraints(url: string): Constraints {
     fabric: { include: fabricValues },
     sleeve: { include: allFilters["Sleeve"] ?? [] },
     neck: { include: allFilters["Neck"] ?? [] },
-    size: { include: allFilters["Size"] ?? [] },
+    // Real captured Myntra URLs use "size_facet" (lowercase, underscored),
+    // not "Size" — the original assumption. Both are accepted on read in
+    // case different category pages differ, but only size_facet is ever
+    // written back out (see buildUrlFromConstraints).
+    size: { include: allFilters["size_facet"] ?? allFilters["Size"] ?? [] },
     color: {
       include: allFilters["Color"] ?? [],
       exclude: [],
@@ -107,6 +112,35 @@ export function parseUrlToConstraints(url: string): Constraints {
     other: Object.keys(other).length ? other : undefined,
   };
 }
+
+// gateway/v4/search/{category} URLs (intercepted by main-world-interceptor.ts
+// from Myntra's own fetch/XHR calls) carry the same `f=` grammar as the
+// visible address-bar URL, but the path is `/gateway/v4/search/dresses`
+// instead of `/dresses` — parseCategory's `parts[0]` would read "gateway"
+// as the articleType if handed this directly, so strip the known prefix
+// first and delegate to the exact same parsing logic either way.
+const GATEWAY_PATH_PREFIX = "/gateway/v4/search/";
+
+export function parseGatewayUrlToConstraints(url: string): Constraints {
+  const u = new URL(url);
+  if (u.pathname.startsWith(GATEWAY_PATH_PREFIX)) {
+    const category = u.pathname.slice(GATEWAY_PATH_PREFIX.length);
+    u.pathname = `/${category}`;
+  }
+  return parseUrlToConstraints(u.toString());
+}
+
+// A "Categories" facet was previously guessed here (Title-Casing the
+// articleType slug) on the theory that Myntra needs it in addition to the
+// path segment — that theory doesn't hold in general: Myntra's real
+// human-readable category label often differs from the URL slug in ways
+// that can't be derived from it (e.g. slug "traditional-south-indian-wear"
+// vs. real label "Traditional South Ethnic Wear"), so a guessed value adds
+// a filter Myntra doesn't recognize and can turn a working bare-category
+// page into a 404. Not worth the risk — the path segment alone is what's
+// actually been confirmed to work across categories; retryApply.ts's
+// zero-result/error retry loop is what recovers on categories that need
+// extra facets, rather than guessing them upfront.
 
 export function buildUrlFromConstraints(c: Constraints): string {
   const base = `https://www.myntra.com/${c.category.articleType}`;
@@ -118,7 +152,10 @@ export function buildUrlFromConstraints(c: Constraints): string {
   if (c.fabric.include.length) fParts.push(`Fabric Types:${c.fabric.include.join(",")}`);
   if (c.sleeve?.include.length) fParts.push(`Sleeve:${c.sleeve.include.join(",")}`);
   if (c.neck?.include.length) fParts.push(`Neck:${c.neck.include.join(",")}`);
-  if (c.size.include.length) fParts.push(`Size:${c.size.include.join(",")}`);
+  // Real captured Myntra URLs use "size_facet" (lowercase, underscored) —
+  // "Size" (capitalized) was the original, incorrect assumption and
+  // silently produced a URL Myntra doesn't recognize as a size filter.
+  if (c.size.include.length) fParts.push(`size_facet:${c.size.include.join(",")}`);
   if (c.color.include.length) fParts.push(`Color:${c.color.include.join(",")}`);
   if (c.occasion) fParts.push(`Occasions:${c.occasion}`);
   if (c.other) {

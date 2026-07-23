@@ -6,6 +6,7 @@ import type {
   CoverageResponse,
   DiffResult,
   DiscoverItem,
+  DiscoverSearchResponse,
   DriftResponse,
   GlobalExclusions,
   ObserveResponse,
@@ -133,6 +134,12 @@ export const api = {
     request<ProfileVersion>(`/discover/${encodeURIComponent(profileId)}/fork`, {
       method: "POST",
       body: JSON.stringify({ personaId, name }),
+    }),
+
+  discoverSearch: (sentence: string) =>
+    request<DiscoverSearchResponse>("/discover/search", {
+      method: "POST",
+      body: JSON.stringify({ sentence }),
     }),
 
   // --- Behavioural suggestions (master prompt Part 2, Section 3) ---

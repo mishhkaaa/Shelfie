@@ -5,9 +5,7 @@ import { ProfileList } from "./panel/ProfileList";
 import { SaveSheet } from "./panel/SaveSheet";
 import { Timeline } from "./panel/Timeline";
 import { ThreeWaySaveModal } from "./panel/ThreeWaySaveModal";
-import { Discover } from "./panel/Discover";
 import { BehaviourPanel } from "./panel/BehaviourPanel";
-import { IntentCompiler } from "./panel/IntentCompiler";
 import { GlobalExclusionsPanel } from "./panel/GlobalExclusionsPanel";
 import { parseUrlToConstraints } from "./adapter/urlSchema";
 
@@ -18,6 +16,7 @@ export default function App() {
   const addPersona = useShelfieStore((state) => state.addPersona);
   const loadLiveConstraints = useShelfieStore((state) => state.loadLiveConstraints);
   const initialize = useShelfieStore((state) => state.initialize);
+  const refreshProfilesForPersona = useShelfieStore((state) => state.refreshProfilesForPersona);
   const actionError = useShelfieStore((state) => state.actionError);
   const clearActionError = useShelfieStore((state) => state.clearActionError);
 
@@ -42,6 +41,17 @@ export default function App() {
     // 1. Listen to Content Script (for pushState SPA changes)
     const messageListener = (message: any) => {
       if (message.type === "MYNTRA_URL_CHANGED") handleUrl(message.url);
+      // Additive read-signal from the MAIN-world gateway interceptor — more
+      // reliable than URL-parsing for some filter interactions, but never a
+      // replacement for it. Last-message-wins if the two ever disagree.
+      if (message.type === "MYNTRA_GATEWAY_CONSTRAINTS") loadLiveConstraints(message.constraints);
+      // The in-page Discover panel (extension/src/inpage/) is a separate
+      // bundle with its own store — forking a profile there is genuinely
+      // saved immediately (confirmed directly against the backend), but
+      // this side panel has no other way to find out about it. Without
+      // this, the new profile stayed invisible here until switching
+      // personas away and back forced a re-fetch.
+      if (message.type === "SHELFIE_PROFILE_FORKED") refreshProfilesForPersona(message.personaId);
     };
     chrome.runtime.onMessage.addListener(messageListener);
 
@@ -122,13 +132,11 @@ export default function App() {
       )}
 
       <StatusBar />
-      <IntentCompiler />
       <ProfileList />
       <SaveSheet />
       <Timeline />
       <BehaviourPanel />
       <GlobalExclusionsPanel />
-      <Discover />
 
       <ThreeWaySaveModal />
     </div>
