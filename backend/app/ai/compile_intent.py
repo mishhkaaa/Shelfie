@@ -124,9 +124,20 @@ COMPILE_INTENT_SCHEMA = {
                 "required": ["attribute", "value"],
                 "additionalProperties": False,
             },
-        }
+        },
+        "searchQuery": {
+            "type": "string",
+            "description": (
+                "The core product search phrase, rewritten as Myntra's own "
+                "search bar would expect it (concise product noun phrase, "
+                "e.g. 'men formal shirts', 'red saree', 'running shoes') — "
+                "used as a fallback so a request for a product type outside "
+                "this app's small filter vocabulary can still search "
+                "Myntra directly instead of being silently dropped."
+            ),
+        },
     },
-    "required": ["proposals"],
+    "required": ["proposals", "searchQuery"],
     "additionalProperties": False,
 }
 
@@ -141,7 +152,13 @@ SYSTEM_PROMPT = (
     "Propose EVERY distinct attribute mentioned as its own separate item in "
     "the list — a sentence naming a category, a color, and a size should "
     "produce three separate proposals, not just the first one you notice. "
-    "For size, propose it exactly as written (e.g. 'XS', 'M', 'large')."
+    "For size, propose it exactly as written (e.g. 'XS', 'M', 'large'). "
+    "Separately, ALWAYS also produce searchQuery: a short product-search "
+    "phrase capturing what the person is shopping for (product type plus "
+    "any strongly identifying descriptor), suitable for typing directly "
+    "into a retail search bar — this is independent of the attribute list "
+    "above and should be filled in even if none of the structured "
+    "attributes apply."
 )
 
 
@@ -196,6 +213,16 @@ def validate_and_merge(proposals: list[dict]) -> tuple[dict, dict[str, str]]:
     return patch, provenance
 
 
+def _slugify_search_query(query: str) -> str:
+    """Turns a free-text search phrase into the hyphenated slug Myntra's own
+    URL scheme expects in the category/search path position (the same shape
+    as 'kurtas' or 'nike-shoes') — not validated against a whitelist, since
+    it's a search string being handed to Myntra's own search, not a filter
+    value this app is asserting is real."""
+    words = "".join(c if c.isalnum() or c.isspace() else " " for c in query.lower()).split()
+    return "-".join(words)
+
+
 def compile_intent(sentence: str) -> tuple[dict, dict[str, str]]:
     result: Optional[dict] = call_groq_structured(
         system_prompt=SYSTEM_PROMPT,
@@ -206,4 +233,21 @@ def compile_intent(sentence: str) -> tuple[dict, dict[str, str]]:
     proposals = (result or {}).get("proposals", []) if isinstance(result, dict) else []
     if not isinstance(proposals, list):
         proposals = []
-    return validate_and_merge(proposals)
+    patch, provenance = validate_and_merge(proposals)
+
+    # If the LLM couldn't map a spoken product type onto this app's small
+    # hand-maintained articleType lexicon (which only covers the synthetic
+    # demo catalog's 5 categories — real Myntra has hundreds), fall back to
+    # Myntra's own free-text search instead of just dropping the request.
+    # Myntra resolves a search phrase through the same URL path position as
+    # a known category slug (see buildUrlFromConstraints), so this is a
+    # real, working fallback, not a dead end.
+    if "category" not in patch or not patch["category"].get("articleType"):
+        search_query = result.get("searchQuery") if isinstance(result, dict) else None
+        if isinstance(search_query, str) and search_query.strip():
+            slug = _slugify_search_query(search_query)
+            if slug:
+                patch.setdefault("category", {})["articleType"] = slug
+                provenance["category.articleType"] = f'{search_query} (Myntra search: "{search_query}")'
+
+    return patch, provenance

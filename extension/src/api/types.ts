@@ -96,6 +96,13 @@ export interface CompileIntentResponse {
   provenance: Record<string, string>;
 }
 
+export interface DiscoverSearchResponse {
+  // null means Groq ranking was unavailable — caller should keep whatever
+  // client-side ranking it already has rather than treating this as "no
+  // matches."
+  rankedProfileIds: string[] | null;
+}
+
 export interface DriftResponse {
   decision: "new_version" | "update" | "new_profile";
   reason: string;

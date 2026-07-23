@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Constraints, DiscoverItem, DriftResponse, ProfileVersion } from "../api/types";
 import { api } from "../api/client";
 import { constraintsEqual } from "../adapter/urlSchema";
+import { fetchDiscoverFeedAction, forkProfileAction, starProfileAction } from "./discoverActions";
 
 interface Persona {
   id: string;
@@ -46,6 +47,7 @@ interface ShelfieState {
 
   // Part 2 actions — new actions, no existing signatures touched.
   toggleVisibility: (profileId: string, visibility: "private" | "public") => Promise<void>;
+  refreshProfilesForPersona: (personaId: string) => Promise<void>;
   fetchDiscoverFeed: () => Promise<void>;
   starProfile: (profileId: string) => Promise<void>;
   forkProfile: (profileId: string, personaId: string, name: string) => Promise<void>;
@@ -93,6 +95,18 @@ export const useShelfieStore = create<ShelfieState>()((set, get) => ({
   setActivePersona: (id) => {
     set({ activePersona: id, activeProfile: null, isDirty: false, profiles: [] });
     fetchProfilesFor(id).then((profiles) => set({ profiles }));
+  },
+
+  // Re-fetches profiles for a given persona without disturbing activeProfile
+  // /isDirty — used when something outside this store (a fork made from the
+  // in-page Discover panel, a separate bundle/store entirely) changes what's
+  // in the backend for a persona the side panel is currently looking at, or
+  // may look at later. Only touches local state if it's still the active
+  // persona by the time the fetch resolves, so a persona switch mid-flight
+  // can't clobber the newly-selected persona's profiles with stale data.
+  refreshProfilesForPersona: async (personaId) => {
+    const profiles = await fetchProfilesFor(personaId);
+    if (get().activePersona === personaId) set({ profiles });
   },
 
   addPersona: async (label) => {
@@ -219,51 +233,41 @@ export const useShelfieStore = create<ShelfieState>()((set, get) => ({
   },
 
   fetchDiscoverFeed: async () => {
-    try {
-      const { profiles } = await api.discover();
-      set({ discoverFeed: profiles, actionError: null });
-    } catch (err) {
-      console.error("Shelfie: fetchDiscoverFeed failed", err);
-      set({ actionError: "Couldn't load Discover feed — try again." });
+    const result = await fetchDiscoverFeedAction();
+    if ("error" in result) {
+      set({ actionError: result.error });
+      return;
     }
+    set({ discoverFeed: result.profiles, actionError: null });
   },
 
   starProfile: async (profileId) => {
-    try {
-      const result = await api.star(profileId);
-      set((state) => ({
-        discoverFeed: state.discoverFeed.map((item) =>
-          item.profileId === profileId
-            ? { ...item, starredByMe: result.starred, starsCount: result.starsCount }
-            : item
-        ),
-        actionError: null,
-      }));
-    } catch (err) {
-      console.error("Shelfie: starProfile failed", err);
-      set({ actionError: "Couldn't update star — try again." });
+    const result = await starProfileAction(profileId);
+    if ("error" in result) {
+      set({ actionError: result.error });
+      return;
     }
+    set((state) => ({
+      discoverFeed: state.discoverFeed.map((item) =>
+        item.profileId === profileId
+          ? { ...item, starredByMe: result.starred, starsCount: result.starsCount }
+          : item
+      ),
+      actionError: null,
+    }));
   },
 
   forkProfile: async (profileId, personaId, name) => {
-    if (!personaId || !name.trim()) {
-      const message = "Choose a persona and a name to fork into first.";
-      console.error("Shelfie: forkProfile no-op —", message, { profileId, personaId, name });
-      set({ actionError: message });
+    const result = await forkProfileAction(profileId, personaId, name);
+    if ("error" in result) {
+      set({ actionError: result.error });
       return;
     }
-    try {
-      const forked = await api.fork(profileId, personaId, name);
-      const { profiles } = await api.discover();
-      set((state) => ({
-        profiles: state.activePersona === personaId ? [...state.profiles, forked] : state.profiles,
-        discoverFeed: profiles,
-        actionError: null,
-      }));
-    } catch (err) {
-      console.error("Shelfie: forkProfile failed", err);
-      set({ actionError: "Couldn't fork this profile — try again." });
-    }
+    set((state) => ({
+      profiles: state.activePersona === personaId ? [...state.profiles, result.forked] : state.profiles,
+      discoverFeed: result.feed,
+      actionError: null,
+    }));
   },
 
   setBehaviourTracking: async (enabled) => {

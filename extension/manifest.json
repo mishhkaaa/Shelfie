@@ -13,6 +13,23 @@
       "matches": ["https://www.myntra.com/*"],
       "js": ["content-script.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.myntra.com/*"],
+      "js": ["inpage-panel.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.myntra.com/*"],
+      "js": ["main-world-interceptor.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["inpage-panel.css"],
+      "matches": ["https://www.myntra.com/*"]
     }
   ],
   "side_panel": {

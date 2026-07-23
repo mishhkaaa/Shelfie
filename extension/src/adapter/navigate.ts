@@ -17,3 +17,12 @@ export function navigateActiveTabTo(url: string): void {
     });
   });
 }
+
+// Counterpart to navigateActiveTabTo for code that already runs as a content
+// script injected into the Myntra page itself (e.g. the in-page Discover
+// panel). chrome.tabs.* is only available to extension pages (side panel,
+// background) — a content script has no way to query/message "the active
+// tab" because it IS the active tab, so it can just navigate directly.
+export function navigateCurrentPageTo(url: string): void {
+  window.location.href = url;
+}

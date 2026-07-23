@@ -5,13 +5,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..ai.rank_profiles import rank_profiles
 from ..db import get_db
 from ..deps import get_account_id
 from ..labels import owner_label_for_account
 from ..models import Event, Persona, Profile, Star
 from ..profile_ops import events_for, to_out
 from ..projection import project
-from ..schemas import Constraints, DiscoverItem, DiscoverResponse, ForkRequest, ProfileVersionOut, StarResponse
+from ..schemas import (
+    Constraints,
+    DiscoverItem,
+    DiscoverResponse,
+    DiscoverSearchRequest,
+    DiscoverSearchResponse,
+    ForkRequest,
+    ProfileVersionOut,
+    StarResponse,
+)
 
 router = APIRouter(tags=["discover"])
 
@@ -35,13 +45,7 @@ def _get_public_profile(db: Session, profile_id: str) -> Profile:
     return profile
 
 
-@router.get("/discover", response_model=DiscoverResponse)
-def discover_feed(
-    limit: int = 20,
-    offset: int = 0,
-    account_id: str = Depends(get_account_id),
-    db: Session = Depends(get_db),
-):
+def _build_discover_feed(db: Session, account_id: str, limit: int, offset: int) -> list[DiscoverItem]:
     profiles = (
         db.query(Profile)
         .filter(Profile.visibility == "public", Profile.archived.is_(False))
@@ -92,7 +96,38 @@ def discover_feed(
 
     items.sort(key=score, reverse=True)
 
-    return DiscoverResponse(profiles=items)
+    return items
+
+
+@router.get("/discover", response_model=DiscoverResponse)
+def discover_feed(
+    limit: int = 20,
+    offset: int = 0,
+    account_id: str = Depends(get_account_id),
+    db: Session = Depends(get_db),
+):
+    return DiscoverResponse(profiles=_build_discover_feed(db, account_id, limit, offset))
+
+
+@router.post("/discover/search", response_model=DiscoverSearchResponse)
+def discover_search(
+    body: DiscoverSearchRequest,
+    limit: int = 50,
+    account_id: str = Depends(get_account_id),
+    db: Session = Depends(get_db),
+):
+    """Semantic re-ranking of the public feed against a free-text sentence,
+    via Groq (see ai/rank_profiles.py) — a genuine understanding-based
+    match (synonyms, related concepts), not just string/stem overlap. The
+    extension already has a fast client-side stemmed-word ranking it shows
+    immediately; this endpoint's result replaces that ordering once it
+    resolves, so a slow/unavailable Groq call never blocks the search."""
+    feed = _build_discover_feed(db, account_id, limit, 0)
+    if not body.sentence.strip():
+        return DiscoverSearchResponse(rankedProfileIds=None)
+
+    ranked = rank_profiles(body.sentence, [item.model_dump() for item in feed])
+    return DiscoverSearchResponse(rankedProfileIds=ranked)
 
 
 @router.post("/discover/{profile_id}/star", response_model=StarResponse)

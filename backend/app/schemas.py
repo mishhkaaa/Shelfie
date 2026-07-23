@@ -143,6 +143,17 @@ class DiscoverResponse(BaseModel):
     profiles: list[DiscoverItem]
 
 
+class DiscoverSearchRequest(BaseModel):
+    sentence: str
+
+
+class DiscoverSearchResponse(BaseModel):
+    # Relevance-ordered subset of profileIds from the caller's current
+    # Discover feed. None means Groq ranking was unavailable and the caller
+    # should keep whatever client-side ranking it already has.
+    rankedProfileIds: Optional[list[str]] = None
+
+
 class StarResponse(BaseModel):
     starred: bool
     starsCount: int

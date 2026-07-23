@@ -30,10 +30,19 @@ _explicit_origins = [
 # and per machine — allow_origin_regex covers any of them so local dev never
 # silently CORS-fails. This is NOT appropriate for the eventual AWS
 # deployment, which should pin CORS_ORIGINS to the real extension ID(s).
+#
+# The in-page Discover panel (content script injected into myntra.com) is a
+# different case: fetch() calls made from a content script carry the PAGE's
+# origin (https://www.myntra.com), not chrome-extension://..., because
+# content scripts execute in the page's own security context for this
+# purpose even though they're extension code — the regex above never
+# matches it. Without this, every request from the in-page panel fails CORS
+# silently (the browser blocks the response before JS ever sees it), which
+# surfaced as the Discover list hanging on "Loading..." forever.
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"chrome-extension://.*",
-    allow_origins=_explicit_origins or ["http://localhost:5173"],
+    allow_origins=_explicit_origins or ["http://localhost:5173", "https://www.myntra.com"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

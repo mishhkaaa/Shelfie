@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-myntra-brand: #ff3f6c;
+  --color-myntra-hover: #e0325d;
+  --color-myntra-dark: #282c3f;
+}
+
+/* Shadow DOM isolation means Myntra's own web fonts never reach this panel
+   (that's the intended CSS isolation, not a bug) — Tailwind's Preflight
+   otherwise falls back to a generic sans-serif that reads as visibly
+   mismatched against the host page. Pin the same system-font stack the
+   side panel already uses (index.css) so this panel looks intentional
+   rather than like an unstyled fallback. */
+:host {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}

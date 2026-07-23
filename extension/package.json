@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && copy manifest.json dist\\manifest.json",
+    "build": "tsc -b && vite build && npm run build:background && npm run build:content-script && npm run build:inpage-panel && npm run build:main-world-interceptor && copy manifest.json dist\\manifest.json",
+    "build:background": "set SHELFIE_ENTRY=background&& vite build -c vite.content-scripts.config.ts",
+    "build:content-script": "set SHELFIE_ENTRY=content-script&& vite build -c vite.content-scripts.config.ts",
+    "build:inpage-panel": "set SHELFIE_ENTRY=inpage-panel&& vite build -c vite.content-scripts.config.ts",
+    "build:main-world-interceptor": "set SHELFIE_ENTRY=main-world-interceptor&& vite build -c vite.content-scripts.config.ts",
     "lint": "oxlint",
     "preview": "vite preview"
   },
