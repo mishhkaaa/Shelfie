@@ -11,6 +11,7 @@ import type {
   GlobalExclusions,
   ObserveResponse,
   ProfileVersion,
+  ShareResponse,
 } from "./types";
 
 // No configurable settings field exists in the extension UI for this (see
@@ -185,5 +186,12 @@ export const api = {
     request<CompileIntentResponse>("/ai/compile-intent", {
       method: "POST",
       body: JSON.stringify({ sentence }),
+    }),
+
+  // --- WhatsApp sharing (via Twilio) ---
+  shareProfile: (profileId: string, myntraLink: string, toNumber?: string) =>
+    request<ShareResponse>(`/profiles/${encodeURIComponent(profileId)}/share`, {
+      method: "POST",
+      body: JSON.stringify({ channel: "whatsapp", myntraLink, toNumber }),
     }),
 };

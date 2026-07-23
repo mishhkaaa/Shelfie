@@ -218,3 +218,19 @@ class CompileIntentRequest(BaseModel):
 class CompileIntentResponse(BaseModel):
     constraints: dict
     provenance: dict[str, str]
+
+
+class ShareRequest(BaseModel):
+    channel: Literal["whatsapp"] = "whatsapp"
+    toNumber: Optional[str] = None
+    # The frontend builds this via the existing buildUrlFromConstraints —
+    # reused as-is rather than reimplementing Myntra URL construction in
+    # Python (which would drift out of sync with the TS version's facet-key
+    # fixes, e.g. size_facet).
+    myntraLink: str
+
+
+class ShareResponse(BaseModel):
+    sent: bool
+    message: str
+    detail: Optional[str] = None

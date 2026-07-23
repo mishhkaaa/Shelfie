@@ -3,6 +3,7 @@ import { useInpageStore } from "./store/useInpageStore";
 import { ForkControl } from "./ForkControl";
 import { CombinedSearch } from "./CombinedSearch";
 import { applyWithRetry } from "./retryApply";
+import { ShareButton } from "../components/ShareButton";
 
 export function DiscoverPanel() {
   const discoverFeed = useInpageStore((state) => state.discoverFeed);
@@ -77,6 +78,7 @@ export function DiscoverPanel() {
                   Apply directly
                 </button>
                 <ForkControl item={item} />
+                <ShareButton profileId={item.profileId} name={item.name} constraints={item.constraints} />
               </div>
             </div>
           ))}

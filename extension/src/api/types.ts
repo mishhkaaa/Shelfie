@@ -103,6 +103,12 @@ export interface DiscoverSearchResponse {
   rankedProfileIds: string[] | null;
 }
 
+export interface ShareResponse {
+  sent: boolean;
+  message: string;
+  detail?: string | null;
+}
+
 export interface DriftResponse {
   decision: "new_version" | "update" | "new_profile";
   reason: string;
