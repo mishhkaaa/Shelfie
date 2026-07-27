@@ -156,6 +156,39 @@ export function parseGatewayUrlToConstraints(url: string): Constraints {
 // zero-result/error retry loop is what recovers on categories that need
 // extra facets, rather than guessing them upfront.
 
+function applyPriceParam(c: Constraints, params: URLSearchParams): void {
+  // Price lives in `rf`, not `f` — see parsePriceFromRf's comment for the
+  // grammar. min defaults to 0 (Myntra accepts a 0 lower bound) so a
+  // max-only constraint like "under 300" still round-trips.
+  if (c.price && (c.price.min > 0 || c.price.max > 0)) {
+    const min = c.price.min || 0;
+    const max = c.price.max || min;
+    params.set("rf", `Price:${min}.0_${max}.0_${min}.0 TO ${max}.0`);
+  }
+}
+
+// Category (the URL path segment itself) and price (the `rf=` grammar,
+// reverse-engineered from a real captured URL) are the only two facets
+// confirmed to serialize the same way on every category page. Every other
+// facet's `f=` key genuinely varies per category (Fabric vs "Fabric Types",
+// Size vs size_facet, and others never yet observed) — guessing one and
+// baking it into the URL is exactly what caused filters to silently
+// zero-match or get dropped by the retry loop. `applyFiltersViaDom.ts`
+// applies the rest by clicking the real, already-rendered filter checkboxes
+// on this bare page instead, so it's never possible to send Myntra a facet
+// key it doesn't recognize.
+export function buildBareUrlFromConstraints(c: Constraints): string {
+  const base = `https://www.myntra.com/${c.category.articleType}`;
+  const params = new URLSearchParams();
+  applyPriceParam(c, params);
+  return `${base}?${params.toString()}`;
+}
+
+// Full best-effort URL with every facet guessed into `f=` — still needed
+// for ShareButton.tsx, where the recipient opens the link in their own
+// browser and there's no page to click filters on at all; a guessed URL
+// (occasionally wrong) is the only option there. In-app apply flows should
+// prefer buildBareUrlFromConstraints + applyFiltersViaDom instead.
 export function buildUrlFromConstraints(c: Constraints): string {
   const base = `https://www.myntra.com/${c.category.articleType}`;
   const params = new URLSearchParams();
@@ -183,14 +216,7 @@ export function buildUrlFromConstraints(c: Constraints): string {
     params.set("f", fParts.join("::"));
   }
 
-  // Price lives in `rf`, not `f` — see parsePriceFromRf's comment for the
-  // grammar. min defaults to 0 (Myntra accepts a 0 lower bound) so a
-  // max-only constraint like "under 300" still round-trips.
-  if (c.price && (c.price.min > 0 || c.price.max > 0)) {
-    const min = c.price.min || 0;
-    const max = c.price.max || min;
-    params.set("rf", `Price:${min}.0_${max}.0_${min}.0 TO ${max}.0`);
-  }
+  applyPriceParam(c, params);
 
   return `${base}?${params.toString()}`;
 }

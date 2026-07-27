@@ -1,6 +1,7 @@
 import type { Constraints } from "../api/types";
-import { buildUrlFromConstraints } from "../adapter/urlSchema";
+import { buildBareUrlFromConstraints } from "../adapter/urlSchema";
 import { navigateCurrentPageTo } from "../adapter/navigate";
+import { buildClickQueue, applyClickQueue, waitForFilterSidebar } from "./applyFiltersViaDom";
 
 const STORAGE_KEY = "shelfie_retry_apply";
 const MAX_ATTEMPTS = 5;
@@ -11,12 +12,17 @@ const MAX_ATTEMPTS = 5;
 const DOM_CHECK_DELAY_MS = 1500;
 
 // Drop order when a combination returns zero results: least-confident /
-// most-likely-to-be-wrong fields first (free-text-derived facets like size
-// and fabric are far more likely to use a value Myntra doesn't recognize
-// than articleType or color, which come from a validated lexicon or the
-// path itself) — never drops category.articleType, since without it there's
-// no page to be on at all.
+// most-likely-to-be-wrong fields first. `other` goes first since those
+// keys/values are free-form and least vetted of all; category.articleType
+// is never dropped, since without it there's no page to be on at all.
+// Unlike the old URL-guessing version, dropping a field here no longer
+// means "Myntra rejected this facet key" (applyFiltersViaDom only ever
+// clicks checkboxes that genuinely exist on the page) — it now means
+// "this exact combination of real filters has no matching products",
+// so broadening by dropping the least-confident one first is still the
+// right recovery.
 const DROP_ORDER: Array<(c: Constraints) => Constraints> = [
+  (c) => ({ ...c, other: undefined }),
   (c) => ({ ...c, fabric: { include: [] } }),
   (c) => ({ ...c, sleeve: { include: [] } }),
   (c) => ({ ...c, neck: { include: [] } }),
@@ -24,11 +30,6 @@ const DROP_ORDER: Array<(c: Constraints) => Constraints> = [
   (c) => ({ ...c, occasion: undefined }),
   (c) => ({ ...c, brand: { ...c.brand, include: [] } }),
   (c) => ({ ...c, color: { ...c.color, include: [] } }),
-  // Last resort: drop every facet and keep only the bare category page —
-  // some categories 404 on ANY unrecognized f= facet before the search
-  // gateway is ever called (no JSON response to intercept at all), so the
-  // only thing confirmed to work in that case is the plain /articleType URL.
-  (c) => ({ ...c, brand: { include: [], exclude: [] }, color: { include: [], exclude: [] } }),
 ];
 
 interface RetryState {
@@ -67,23 +68,22 @@ function pageLooksLikeNoResults(): boolean {
   return productLikeNodes.length === 0;
 }
 
-// Applies constraints and arms the retry watcher: if Myntra's own search
-// gateway (observed via main-world-interceptor.ts) reports zero results, OR
-// the page itself renders Myntra's empty-state/404 markup, drop the
-// next-least-confident filter and try again, up to MAX_ATTEMPTS — instead
-// of silently leaving the user on a dead page because one guessed facet
-// key/value didn't match Myntra's real vocabulary.
+// Applies constraints: navigates to the bare category+price page (the only
+// two facets confirmed to serialize the same way everywhere — see
+// urlSchema.ts), then arms the retry watcher, which resumeRetryIfPending
+// picks up on the next page load to click-apply the rest.
 export function applyWithRetry(constraints: Constraints): void {
   writeState({ constraints, attempt: 0 });
-  navigateCurrentPageTo(buildUrlFromConstraints(constraints));
+  navigateCurrentPageTo(buildBareUrlFromConstraints(constraints));
 }
 
-// Called once on every page load (from mount.ts) — resumes a retry in
-// progress, or does nothing if this load wasn't the result of applyWithRetry.
-export function resumeRetryIfPending(onGiveUp: (constraints: Constraints) => void): void {
-  const state = readState();
-  if (!state) return;
-
+// Watches the just-applied (fully click-settled) state for zero results —
+// via the search gateway's own reported count, or a DOM-based fallback for
+// requests that never reach the gateway at all — and drops the next-least-
+// confident filter and retries (a fresh bare-page navigation, since
+// unclicking an already-checked box is less reliable than starting clean)
+// up to MAX_ATTEMPTS, instead of silently leaving the user on a dead page.
+function armZeroResultWatcher(state: RetryState, onGiveUp: (constraints: Constraints) => void): void {
   let settled = false;
 
   const retryOrGiveUp = () => {
@@ -100,7 +100,7 @@ export function resumeRetryIfPending(onGiveUp: (constraints: Constraints) => voi
 
     const next = DROP_ORDER[state.attempt](state.constraints);
     writeState({ constraints: next, attempt: state.attempt + 1 });
-    navigateCurrentPageTo(buildUrlFromConstraints(next));
+    navigateCurrentPageTo(buildBareUrlFromConstraints(next));
   };
 
   const succeed = () => {
@@ -125,4 +125,27 @@ export function resumeRetryIfPending(onGiveUp: (constraints: Constraints) => voi
     if (pageLooksLikeNoResults()) retryOrGiveUp();
     else succeed();
   }, DOM_CHECK_DELAY_MS);
+}
+
+// Called once on every page load (from mount.ts) — resumes a retry in
+// progress, or does nothing if this load wasn't the result of applyWithRetry.
+// The bare page just loaded carries only category+price; every other facet
+// in state.constraints still needs to be click-applied here before it's
+// meaningful to check whether the combination returned results.
+export function resumeRetryIfPending(onGiveUp: (constraints: Constraints) => void): void {
+  const state = readState();
+  if (!state) return;
+
+  const queue = buildClickQueue(state.constraints);
+
+  if (queue.length === 0) {
+    armZeroResultWatcher(state, onGiveUp);
+    return;
+  }
+
+  waitForFilterSidebar().then(() => {
+    applyClickQueue(queue).then(() => {
+      armZeroResultWatcher(state, onGiveUp);
+    });
+  });
 }

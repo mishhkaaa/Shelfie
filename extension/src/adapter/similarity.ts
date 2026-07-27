@@ -6,11 +6,21 @@ function overlapCount(a: string[] | undefined, b: string[] | undefined): number 
   return a.filter((v) => bSet.has(v.toLowerCase())).length;
 }
 
+// Carry no relevance signal in either direction, but showed up often enough
+// in both a sentence ("...kurtas under 1500 for school") and an unrelated
+// profile's slugified articleType ("birthday-dresses-for-women" contains
+// "for") to produce a false-positive fuzzy match on the shared stopword
+// alone — a completely irrelevant profile scoring just above 0 is enough to
+// survive rankDiscoverFeed's score > 0 filter and show up in the list.
+const STOPWORDS = new Set([
+  "a", "an", "the", "for", "and", "or", "with", "under", "over", "in", "on", "of", "to", "by", "from", "at",
+]);
+
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((w) => w.length > 1);
+    .filter((w) => w.length > 1 && !STOPWORDS.has(w));
 }
 
 // Naive singular/plural + common-suffix folding — "shirts"/"shirt",
