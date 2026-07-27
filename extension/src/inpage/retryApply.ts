@@ -1,7 +1,7 @@
 import type { Constraints } from "../api/types";
 import { buildBareUrlFromConstraints } from "../adapter/urlSchema";
 import { navigateCurrentPageTo } from "../adapter/navigate";
-import { buildClickQueue, applyClickQueue, waitForFilterSidebar } from "./applyFiltersViaDom";
+import { buildFilterTargets, readFilterGroups, resolveFilters } from "./myntraFilterSchema";
 
 const STORAGE_KEY = "shelfie_retry_apply";
 const MAX_ATTEMPTS = 5;
@@ -15,12 +15,12 @@ const DOM_CHECK_DELAY_MS = 1500;
 // most-likely-to-be-wrong fields first. `other` goes first since those
 // keys/values are free-form and least vetted of all; category.articleType
 // is never dropped, since without it there's no page to be on at all.
-// Unlike the old URL-guessing version, dropping a field here no longer
-// means "Myntra rejected this facet key" (applyFiltersViaDom only ever
-// clicks checkboxes that genuinely exist on the page) — it now means
-// "this exact combination of real filters has no matching products",
-// so broadening by dropping the least-confident one first is still the
-// right recovery.
+// Dropping a field here no longer means "Myntra rejected this facet key"
+// (myntraFilterSchema.ts only ever resolves a target to a key/value Myntra
+// itself reported as real, for this exact category) — it now means "this
+// exact combination of real filters has no matching products", so
+// broadening by dropping the least-confident one first is still the right
+// recovery.
 const DROP_ORDER: Array<(c: Constraints) => Constraints> = [
   (c) => ({ ...c, other: undefined }),
   (c) => ({ ...c, fabric: { include: [] } }),
@@ -32,9 +32,15 @@ const DROP_ORDER: Array<(c: Constraints) => Constraints> = [
   (c) => ({ ...c, color: { ...c.color, include: [] } }),
 ];
 
+// "bare" = just landed on the category+price-only URL and still needs its
+// other facets resolved against the real schema and re-navigated; "resolved"
+// = just landed on that fully-resolved URL, now watch it for zero results.
+type Phase = "bare" | "resolved";
+
 interface RetryState {
   constraints: Constraints;
   attempt: number;
+  phase: Phase;
 }
 
 function readState(): RetryState | null {
@@ -68,21 +74,33 @@ function pageLooksLikeNoResults(): boolean {
   return productLikeNodes.length === 0;
 }
 
-// Applies constraints: navigates to the bare category+price page (the only
-// two facets confirmed to serialize the same way everywhere — see
-// urlSchema.ts), then arms the retry watcher, which resumeRetryIfPending
-// picks up on the next page load to click-apply the rest.
+function buildResolvedUrl(c: Constraints, groups: ReturnType<typeof readFilterGroups>): string {
+  const bareUrl = buildBareUrlFromConstraints(c);
+  const resolved = resolveFilters(groups, buildFilterTargets(c));
+  if (resolved.length === 0) return bareUrl;
+
+  const u = new URL(bareUrl);
+  const fParts = resolved.map((r) => `${r.groupId}:${r.valueId}`);
+  u.searchParams.set("f", fParts.join("::"));
+  return u.toString();
+}
+
+// Applies constraints: navigates to the bare category+price page first (the
+// only two facets confirmed to serialize the same way everywhere — see
+// urlSchema.ts). resumeRetryIfPending picks this up on the next page load,
+// reads Myntra's own embedded filter schema there, and re-navigates once
+// more to the fully-resolved URL.
 export function applyWithRetry(constraints: Constraints): void {
-  writeState({ constraints, attempt: 0 });
+  writeState({ constraints, attempt: 0, phase: "bare" });
   navigateCurrentPageTo(buildBareUrlFromConstraints(constraints));
 }
 
-// Watches the just-applied (fully click-settled) state for zero results —
-// via the search gateway's own reported count, or a DOM-based fallback for
-// requests that never reach the gateway at all — and drops the next-least-
-// confident filter and retries (a fresh bare-page navigation, since
-// unclicking an already-checked box is less reliable than starting clean)
-// up to MAX_ATTEMPTS, instead of silently leaving the user on a dead page.
+// Watches the fully-resolved page for zero results — via the search
+// gateway's own reported count, or a DOM-based fallback for requests that
+// never reach the gateway at all — and drops the next-least-confident
+// filter and retries (back through the bare -> resolved flow, since the
+// schema may look different once a facet's removed) up to MAX_ATTEMPTS,
+// instead of silently leaving the user on a dead page.
 function armZeroResultWatcher(state: RetryState, onGiveUp: (constraints: Constraints) => void): void {
   let settled = false;
 
@@ -99,7 +117,7 @@ function armZeroResultWatcher(state: RetryState, onGiveUp: (constraints: Constra
     }
 
     const next = DROP_ORDER[state.attempt](state.constraints);
-    writeState({ constraints: next, attempt: state.attempt + 1 });
+    writeState({ constraints: next, attempt: state.attempt + 1, phase: "bare" });
     navigateCurrentPageTo(buildBareUrlFromConstraints(next));
   };
 
@@ -128,24 +146,35 @@ function armZeroResultWatcher(state: RetryState, onGiveUp: (constraints: Constra
 }
 
 // Called once on every page load (from mount.ts) — resumes a retry in
-// progress, or does nothing if this load wasn't the result of applyWithRetry.
-// The bare page just loaded carries only category+price; every other facet
-// in state.constraints still needs to be click-applied here before it's
-// meaningful to check whether the combination returned results.
+// progress, or does nothing if this load wasn't the result of
+// applyWithRetry. Myntra's filter schema is rendered server-side into the
+// initial HTML (see myntraFilterSchema.ts) and this bundle only runs at
+// document_idle (manifest.json), so it's already there — no waiting needed,
+// unlike the DOM-click approach this replaced.
 export function resumeRetryIfPending(onGiveUp: (constraints: Constraints) => void): void {
   const state = readState();
   if (!state) return;
 
-  const queue = buildClickQueue(state.constraints);
+  if (state.phase === "bare") {
+    const groups = readFilterGroups();
+    const finalUrl = buildResolvedUrl(state.constraints, groups);
+    const resolvedState = { ...state, phase: "resolved" as const };
 
-  if (queue.length === 0) {
-    armZeroResultWatcher(state, onGiveUp);
+    // Nothing resolved to add (e.g. every facet was already dropped down to
+    // just category+price) — navigating to an identical URL wouldn't
+    // trigger a new page load, so mount.ts's resumeRetryIfPending would
+    // never fire again to pick up the "resolved" phase. Stay on this page
+    // and watch it directly instead.
+    if (finalUrl === window.location.href) {
+      writeState(resolvedState);
+      armZeroResultWatcher(resolvedState, onGiveUp);
+      return;
+    }
+
+    writeState(resolvedState);
+    navigateCurrentPageTo(finalUrl);
     return;
   }
 
-  waitForFilterSidebar().then(() => {
-    applyClickQueue(queue).then(() => {
-      armZeroResultWatcher(state, onGiveUp);
-    });
-  });
+  armZeroResultWatcher(state, onGiveUp);
 }

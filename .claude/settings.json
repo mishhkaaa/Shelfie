@@ -5,7 +5,8 @@
       "WebFetch(domain:www.myntra.com)",
       "Bash(npm run *)",
       "Bash(cat > /tmp_verify.mjs 2>/dev/null; true)",
-      "Bash(node \"C:\\\\Users\\\\mishk\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--mishka-projects-Shelfie\\\\892421ce-e60d-4ec5-9512-10e07b196777\\\\scratchpad\\\\verify_similarity.mjs\")"
+      "Bash(node \"C:\\\\Users\\\\mishk\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--mishka-projects-Shelfie\\\\892421ce-e60d-4ec5-9512-10e07b196777\\\\scratchpad\\\\verify_similarity.mjs\")",
+      "Bash(node \"C:\\\\Users\\\\mishk\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--mishka-projects-Shelfie\\\\892421ce-e60d-4ec5-9512-10e07b196777\\\\scratchpad\\\\verify_myx_parse.mjs\")"
     ],
     "additionalDirectories": [
       "\\"
