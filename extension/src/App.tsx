@@ -8,6 +8,7 @@ import { ThreeWaySaveModal } from "./panel/ThreeWaySaveModal";
 import { BehaviourPanel } from "./panel/BehaviourPanel";
 import { GlobalExclusionsPanel } from "./panel/GlobalExclusionsPanel";
 import { parseUrlToConstraints } from "./adapter/urlSchema";
+import { mergeConstraints } from "./adapter/mergeConstraints";
 
 export default function App() {
   const activePersona = useShelfieStore((state) => state.activePersona);
@@ -43,8 +44,16 @@ export default function App() {
       if (message.type === "MYNTRA_URL_CHANGED") handleUrl(message.url);
       // Additive read-signal from the MAIN-world gateway interceptor — more
       // reliable than URL-parsing for some filter interactions, but never a
-      // replacement for it. Last-message-wins if the two ever disagree.
-      if (message.type === "MYNTRA_GATEWAY_CONSTRAINTS") loadLiveConstraints(message.constraints);
+      // replacement for it: Myntra's internal gateway call doesn't always
+      // carry every facet the address-bar URL does (e.g. a preview/count
+      // request fired mid-interaction), and a blind replace here would blank
+      // out already-detected filters until the next full URL read corrected
+      // it. Merging onto the current liveConstraints keeps this genuinely
+      // additive, matching what this comment always claimed it did.
+      if (message.type === "MYNTRA_GATEWAY_CONSTRAINTS") {
+        const current = useShelfieStore.getState().liveConstraints;
+        loadLiveConstraints(mergeConstraints(current, message.constraints));
+      }
       // The in-page Discover panel (extension/src/inpage/) is a separate
       // bundle with its own store — forking a profile there is genuinely
       // saved immediately (confirmed directly against the backend), but

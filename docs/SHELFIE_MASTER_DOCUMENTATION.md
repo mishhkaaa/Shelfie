@@ -631,7 +631,7 @@ All endpoints (except `/health`) require an `X-Account-Id` header; the account r
   - Occasions: a comma-separated multi-select facet, joined into `Constraints.occasion`'s single string.
 - **Everything else falls into `Constraints.other`** — the parser extracts *every* `key:value` pair from the `f=` query parameter generically, routes the ones explicitly modeled into their typed fields, and preserves the rest verbatim (Length, Fashion Trends, Print or Pattern Types, Dupatta Fabric, etc. have all been seen in real testing) so a multi-filter search never silently loses data.
 - **Colors use Myntra's own `Name_hexsuffix` encoding** (e.g. `Black_36454f`, `Grey_808080`) — captured and round-tripped verbatim, and reused as the vocabulary basis for the synthetic catalog's color values.
-- **`price` is not yet serialized** — Myntra's price/discount facet format (`rf=`) was never fully reverse-engineered; price constraints are tracked internally but don't yet reach a rebuilt URL. Deliberately left as a known gap rather than guessed at.
+- **`price` is serialized via `rf=`** — format is `Price:{min}.0_{max}.0_{min}.0 TO {max}.0` (the min/max pair appears twice: once underscore-joined, once as a "TO"-joined range), confirmed from a real captured Myntra URL. Round-trips through `parseUrlToConstraints`/`buildUrlFromConstraints` like every other facet.
 - **`buildUrlFromConstraints` and the parser are maintained as exact mutual inverses** — every fix to one was paired with a check against the other, since the round-trip correctness (save → reload → reapply reconstructs the identical filter set) is load-bearing for the entire product.
 
 ---
@@ -692,7 +692,7 @@ This is a condensed reference; `BACKEND_BUILD_LOG.md`/`FRONTEND_CHANGES_LOG.md` 
 
 ## 15. Known Limitations & Explicitly Out-of-Scope Items
 
-- **Price filters are not yet serialized into a rebuilt Myntra URL** — tracked internally, not yet round-tripped (Myntra's `rf=` price/discount format was never fully reverse-engineered).
+- **Fabric facet key on write is always `Fabric Types`** — parsing accepts both `Fabric` and `Fabric Types`, but the builder only ever emits `Fabric Types`. On categories whose real facet key is `Fabric` (or something else entirely, e.g. `Fabrics`), this can produce a zero-result page; `retryApply.ts`'s drop-and-retry loop recovers by dropping the fabric filter entirely rather than trying the alternate key.
 - **No AWS deployment yet** — CORS is currently permissive for local dev (`chrome-extension://*` regex, explicit `myntra.com`), not yet pinned to a real deployed extension ID.
 - **The synthetic product catalog is not real Myntra inventory** — explicitly labeled as such everywhere it's surfaced; coverage/diff numbers are directionally illustrative, not real stock counts.
 - **Global exclusions are not wired into drift scoring** — only into catalog-based coverage/diff, a deliberate scope line (see [9.6](#96-global-exclusions-tier-3)).

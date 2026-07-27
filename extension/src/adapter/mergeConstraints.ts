@@ -20,8 +20,24 @@ function mergeUnique(existing: string[] | undefined, incoming: string[] | undefi
 export function mergeConstraints(base: Constraints | null, patch: Partial<Constraints>): Constraints {
   const merged: Constraints = base ? JSON.parse(JSON.stringify(base)) : JSON.parse(JSON.stringify(EMPTY_CONSTRAINTS));
 
-  if (patch.category) merged.category = { ...merged.category, ...patch.category };
-  if (patch.price) merged.price = { ...merged.price, ...patch.price };
+  // Guarded field-by-field rather than a blanket spread: a patch object is
+  // always truthy even when its own fields are empty/zero (e.g. a gateway-
+  // intercepted request that didn't carry a recognizable category or price),
+  // so spreading it wholesale would silently blank out a value this merge
+  // already had. Falling back to the existing value on a falsy incoming
+  // field keeps this merge purely additive, never destructive.
+  if (patch.category) {
+    merged.category = {
+      articleType: patch.category.articleType || merged.category.articleType,
+      gender: patch.category.gender ?? merged.category.gender,
+    };
+  }
+  if (patch.price) {
+    merged.price = {
+      min: patch.price.min || merged.price.min,
+      max: patch.price.max || merged.price.max,
+    };
+  }
   if (patch.brand?.include) merged.brand = { ...merged.brand, include: mergeUnique(merged.brand.include, patch.brand.include) };
   if (patch.fabric?.include) merged.fabric = { include: mergeUnique(merged.fabric.include, patch.fabric.include) };
   if (patch.color?.include) merged.color = { ...merged.color, include: mergeUnique(merged.color.include, patch.color.include) };

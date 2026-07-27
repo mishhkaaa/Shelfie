@@ -48,6 +48,20 @@ function parseAllFilters(fStr: string): Record<string, string[]> {
   return result;
 }
 
+// Myntra's price facet lives in `rf=` (not `f=`) and uses its own grammar:
+// `Price:{min}.0_{max}.0_{min}.0 TO {max}.0` — the min/max pair appears
+// twice (once underscore-joined, once as a "TO"-joined range) rather than
+// once, confirmed from a real captured Myntra URL
+// (`rf=Price%3A1000.0_2500.0_1000.0%20TO%202500.0`). Only the first
+// underscore-joined pair is needed to recover min/max on read.
+function parsePriceFromRf(rfStr: string): { min: number; max: number } {
+  if (!rfStr) return { min: 0, max: 0 };
+  const decoded = decodeURIComponent(rfStr.replace(/\+/g, " "));
+  const match = decoded.match(/Price:([\d.]+)_([\d.]+)_/);
+  if (!match) return { min: 0, max: 0 };
+  return { min: parseFloat(match[1]), max: parseFloat(match[2]) };
+}
+
 // Facets we model with a dedicated, weighted Constraints field. Both
 // spellings of the fabric facet are accepted since different Myntra category
 // pages use different keys. "Categories" is NOT in this set on purpose — it
@@ -72,7 +86,7 @@ export function parseUrlToConstraints(url: string): Constraints {
   const params = u.searchParams;
 
   const f = params.get("f") || "";
-  // const _rf = params.get("rf") || "";
+  const rf = params.get("rf") || "";
 
   const allFilters = parseAllFilters(f);
 
@@ -91,7 +105,7 @@ export function parseUrlToConstraints(url: string): Constraints {
 
   return {
     category: parseCategory(u.pathname, allFilters["Gender"] ?? []),
-    price: { min: 0, max: 0 }, // We will hook up price via 'rf' later when we know the exact format
+    price: parsePriceFromRf(rf),
     brand: {
       include: allFilters["Brand"] ?? [],
       exclude: [],
@@ -167,6 +181,15 @@ export function buildUrlFromConstraints(c: Constraints): string {
   if (fParts.length > 0) {
     // Myntra uses :: to separate different filter keys
     params.set("f", fParts.join("::"));
+  }
+
+  // Price lives in `rf`, not `f` — see parsePriceFromRf's comment for the
+  // grammar. min defaults to 0 (Myntra accepts a 0 lower bound) so a
+  // max-only constraint like "under 300" still round-trips.
+  if (c.price && (c.price.min > 0 || c.price.max > 0)) {
+    const min = c.price.min || 0;
+    const max = c.price.max || min;
+    params.set("rf", `Price:${min}.0_${max}.0_${min}.0 TO ${max}.0`);
   }
 
   return `${base}?${params.toString()}`;
